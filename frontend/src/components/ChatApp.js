@@ -5,28 +5,27 @@
 /**
  * ChatApp — the /chat page (opened by "Try it now" on /product/ai-chat).
  *
- * Frontend only. Same visual language as ProductPage / Hero / AISuite:
+ * Same visual language as ProductPage / Hero / AISuite:
  * drifting aurora + blobs + glass spheres, extruded 3D headings, glossy
  * glass panels, tilt-on-hover cards with glare, magnetic buttons.
  *
  * Self-contained (helpers are duplicated on purpose, like your other files).
  *
- * BACKEND SEAM: everything the backend will replace is in two places:
- *   1. getReply()  — the async generator near the top. Right now it fakes a
- *      streamed answer. Later, fetch("/api/chat") and `yield` each text chunk.
- *   2. The DATA block (USER, MODELS, SEED chats) — swap for real user /
- *      model list / saved conversations.
+ * Talks to the backend: getReply() streams the answer from POST /api/chat.
+ * Chats are saved in the visitor's browser (localStorage), no account needed.
+ * The DATA block (MODELS) is the model list shown in the picker.
  *
  * Features
- *  - Sidebar: nav, conversation list (select / delete / search), upgrade card
- *  - Top bar: search (filters conversations), notifications, user menu
+ *  - Sidebar: nav, conversation list (select / delete / search)
+ *  - Top bar: search (filters conversations), back-to-home link
  *  - Welcome state with suggestion pills, streamed replies with typing dots,
  *    stop / regenerate / copy, code blocks, attachments chips
  *  - Enter to send, Shift+Enter for a new line, Esc closes menus
  *  - Mobile: sidebar becomes a slide-over drawer
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   AnimatePresence,
   MotionConfig,
@@ -39,7 +38,6 @@ import {
 import {
   ArrowLeft,
   ArrowRight,
-  Bell,
   BookOpen,
   Check,
   ChevronDown,
@@ -48,24 +46,21 @@ import {
   Copy,
   FolderOpen,
   Grid2x2,
-  Image as ImageIcon,
-  LogOut,
   Menu,
   MessageCircle,
   MessageSquare,
+  Mic,
   Paperclip,
   Plus,
   RefreshCw,
   Search,
   Send,
-  Settings,
   Sparkles,
   Square,
   Trash2,
-  User,
+  Volume2,
   X,
 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
 
 const EASE = [0.22, 1, 0.36, 1];
 
@@ -81,193 +76,181 @@ const MODELS = [
 
 const NAV = [
   { icon: MessageCircle, label: "AI Chat", href: "/chat", active: true },
-  { icon: Grid2x2, label: "AI Tools", href: "#" },
-  { icon: Compass, label: "Agents", href: "#" },
-  { icon: FolderOpen, label: "Workspace", href: "#" },
-  { icon: BookOpen, label: "Resources", href: "#" },
+  { icon: Grid2x2, label: "AI Tools", href: "/ai-tools/ai-writer" },
+  { icon: Compass, label: "Agents", href: "/agents/research-agent" },
+  { icon: FolderOpen, label: "Workspace", href: "/#workspace" },
+  { icon: BookOpen, label: "Resources", href: "/resources/documentation" },
 ];
 
 const SUGGESTIONS = [
   { label: "Write a blog post about AI trends", prompt: "Write a blog post about AI trends" },
   { label: "Create a marketing plan", prompt: "Create a marketing plan" },
   { label: "Help me with code", prompt: "Help me with code" },
-  { label: "Generate an image", prompt: "Generate an image" },
+  { label: "Summarize a document", prompt: "Summarize the key points of this text:\n\n" },
 ];
 
-const NOTIFICATIONS_UNREAD = true;
-
-// Starting conversations (the first one is the empty "New Chat").
-const SEED = [
-  { id: "c-new", title: "New Chat", messages: [] },
-  {
-    id: "c-web",
-    title: "Website Development Help",
-    messages: [
-      { id: "s1", role: "user", content: "How should I structure a Next.js landing page?" },
-      {
-        id: "s2",
-        role: "assistant",
-        content:
-          "Start with a clear hero, then social proof, features, pricing and a closing call to action.\n\n- Keep every section in its own component\n- Put shared data in one file\n- Use a sticky navbar so people can jump between sections",
-      },
+// Chat modes, opened with /chat?mode=code | docs | voice from the product pages.
+// The backend adds matching instructions for the same keys (see chat.controller.js).
+const MODES = {
+  code: {
+    label: "Code mode",
+    intro: "Paste or attach code and I'll explain it, debug it, review it or help you write more.",
+    placeholder: "Paste code or describe what you want to build...",
+    suggestions: [
+      { label: "Explain this code", prompt: "Explain what this code does, step by step:\n\n" },
+      { label: "Find the bug", prompt: "Find the bug in this code and show the fix:\n\n" },
+      { label: "Refactor it", prompt: "Refactor this code to be cleaner and easier to read:\n\n" },
+      { label: "Write unit tests", prompt: "Write unit tests for this code:\n\n" },
     ],
   },
-  {
-    id: "c-mkt",
-    title: "Marketing Strategy",
-    messages: [
-      { id: "s3", role: "user", content: "Give me a quick launch plan for a new AI tool." },
-      {
-        id: "s4",
-        role: "assistant",
-        content:
-          "Here is a simple plan:\n\n1. Two weeks before: build a waitlist and share build-in-public updates\n2. Launch week: post a demo video and ask early users for quotes\n3. After launch: publish one use-case story every week",
-      },
+  docs: {
+    label: "Documents mode",
+    intro: "Attach a text file (.txt, .md, .csv…) or paste text, then summarize it, ask questions or rewrite it.",
+    placeholder: "Paste text, or attach a file and ask a question about it...",
+    suggestions: [
+      { label: "Summarize this", prompt: "Summarize this in 5 bullet points:\n\n" },
+      { label: "Pull out action items", prompt: "List every action item and deadline in this text:\n\n" },
+      { label: "Make it clearer", prompt: "Rewrite this to be clearer and more concise:\n\n" },
+      { label: "Proofread", prompt: "Proofread this and list the corrections you made:\n\n" },
     ],
   },
-  {
-    id: "c-data",
-    title: "Data Analysis Report",
-    messages: [
-      { id: "s5", role: "user", content: "What should a monthly analytics report include?" },
-      {
-        id: "s6",
-        role: "assistant",
-        content:
-          "Keep it short: **headline numbers**, what changed since last month, the biggest win, the biggest risk, and the next action for each.",
-      },
+  voice: {
+    label: "Voice mode",
+    intro: "Tap the mic and speak. Replies are read aloud (needs a browser with speech support, such as Chrome or Edge).",
+    placeholder: "Tap the mic and talk, or type here...",
+    suggestions: [
+      { label: "Tell me a fun fact", prompt: "Tell me a fun fact." },
+      { label: "Plan my day", prompt: "Help me plan my day." },
+      { label: "Quiz me on history", prompt: "Quiz me with a few quick history questions, one at a time." },
     ],
   },
-  {
-    id: "c-img",
-    title: "Image Generation Ideas",
-    messages: [
-      { id: "s7", role: "user", content: "Give me prompt ideas for futuristic city art." },
-      {
-        id: "s8",
-        role: "assistant",
-        content:
-          "Try these:\n\n- A neon skyline at dusk with floating trains\n- A rooftop garden city above the clouds\n- A glass metropolis reflected in a calm sea",
-      },
-    ],
-  },
-];
+};
 
-/* ====================================================================== */
-/* Mock backend (replace me)                                               */
-/* ====================================================================== */
+/* ---------------------------------------------------------------------- */
+/* Voice: uses the browser's built-in speech APIs (no extra server needed) */
+/* Dictation: SpeechRecognition (Chrome, Edge, Safari). Read aloud:        */
+/* speechSynthesis (all major browsers).                                   */
+/* ---------------------------------------------------------------------- */
 
-const FENCE = "```";
+const getSpeechRecognition = () =>
+  typeof window === "undefined" ? null : window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
-function mockAnswer(prompt) {
-  const p = prompt.toLowerCase();
+/** Strips markdown so replies sound natural when read aloud. */
+function plainForSpeech(md) {
+  return String(md || "")
+    .replace(/```[\s\S]*?```/g, " (code block skipped) ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/[*_~>|]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  if (/code|function|bug|script|react|python|javascript|css|html/.test(p)) {
-    return [
-      "Happy to help with code. Here is a small starting point you can adapt:",
-      "",
-      FENCE + "js",
-      "async function fetchJson(url) {",
-      "  const res = await fetch(url);",
-      "  if (!res.ok) throw new Error(`Request failed: ${res.status}`);",
-      "  return res.json();",
-      "}",
-      FENCE,
-      "",
-      "Paste your own code and tell me what it should do, and I will go through it with you.",
-    ].join("\n");
-  }
-  if (/blog|article|post|write/.test(p)) {
-    return [
-      "Here is an outline you can start from:",
-      "",
-      "- **Hook:** open with one surprising number or a short story",
-      "- **Trend 1:** assistants that remember context",
-      "- **Trend 2:** agents that finish tasks, not just answer",
-      "- **Trend 3:** smaller models running on your own device",
-      "- **Takeaway:** what readers can try this week",
-      "",
-      "Want me to write the full draft in a friendly, practical tone?",
-    ].join("\n");
-  }
-  if (/marketing|plan|strategy|campaign|launch/.test(p)) {
-    return [
-      "A simple marketing plan in three steps:",
-      "",
-      "1. **Know the audience:** pick one group and write down their biggest frustration",
-      "2. **Pick two channels:** for example short videos and an email list",
-      "3. **Measure weekly:** sign-ups, replies, and which message worked best",
-      "",
-      "Tell me about your product and I will make this specific.",
-    ].join("\n");
-  }
-  if (/image|picture|photo|draw|art|logo/.test(p)) {
-    return [
-      "Image generation is coming to this chat soon. Until then, here is a prompt you can reuse:",
-      "",
-      "A calm mountain lake at sunrise, soft pastel colors, glossy 3D style, high detail",
-      "",
-      "Tell me what you want to create and I will refine the prompt.",
-    ].join("\n");
-  }
-  return [
-    "Good question. Here is how I would approach it:",
-    "",
-    "- Start by defining the outcome you want",
-    "- Break it into two or three small steps",
-    "- Try the first step today and adjust from there",
-    "",
-    "This is a demo reply. Real answers appear once the backend is connected.",
-  ].join("\n");
+function stopSpeaking() {
+  if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+}
+
+function speakText(text, onEnd) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+  const clean = plainForSpeech(text).slice(0, 4000);
+  if (!clean) return false;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(clean);
+  u.lang = navigator.language || "en-US";
+  u.onend = () => onEnd?.();
+  u.onerror = () => onEnd?.();
+  window.speechSynthesis.speak(u);
+  return true;
+}
+
+/** Which voice features this browser has. Starts false so server and client render the same. */
+const noSubscribe = () => () => {};
+function useVoiceSupport() {
+  const stt = useSyncExternalStore(noSubscribe, () => Boolean(getSpeechRecognition()), () => false);
+  const tts = useSyncExternalStore(noSubscribe, () => "speechSynthesis" in window, () => false);
+  return useMemo(() => ({ stt, tts }), [stt, tts]);
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-const sleep = (ms, signal) =>
-  new Promise((resolve, reject) => {
-    if (signal?.aborted) return reject(new DOMException("Aborted", "AbortError"));
-    const t = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(t);
-        reject(new DOMException("Aborted", "AbortError"));
-      },
-      { once: true }
-    );
-  });
-
-/**
- * Streams a reply as small text chunks.
- * TODO(backend): replace the body with something like
- *   const res = await fetch("/api/chat", { method: "POST", signal,
- *     body: JSON.stringify({ model: model.id, messages }) });
- *   const reader = res.body.getReader(); ... yield decoder.decode(value)
- */
-// async function* getReply(messages, { signal }) {
-//   const last = messages[messages.length - 1];
-//   const prompt = last?.content || "your file";
-//   const text = mockAnswer(prompt);
-
-//   await sleep(900, signal); // "thinking"
-//   const parts = text.split(/(\s+)/);
-//   for (const part of parts) {
-//     yield part;
-//     await sleep(part.trim() ? 24 + Math.random() * 34 : 0, signal);
-//   }
-// }
+// Chat ids are UUIDs (used as the key when a chat is saved in localStorage).
+const newChatId = () => {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  const h = (n) => Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+  return `${h(8)}-${h(4)}-4${h(3)}-${["8", "9", "a", "b"][Math.floor(Math.random() * 4)]}${h(3)}-${h(12)}`;
+};
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-async function* getReply(messages, { signal, model }) {
+/* ---------------------------------------------------------------------- */
+/* Attachments: text files only                                            */
+/* The file is read in the browser and its text is sent with the message.  */
+/* (PDF / Word / images need server-side parsing or a vision model.)       */
+/* ---------------------------------------------------------------------- */
+
+const TEXT_EXTENSIONS = [
+  "txt", "md", "markdown", "csv", "tsv", "json", "log", "xml", "yml", "yaml", "toml", "ini", "env",
+  "html", "css", "js", "jsx", "ts", "tsx", "py", "java", "c", "h", "cpp", "cs", "go", "rs", "rb",
+  "php", "sh", "sql", "swift", "kt", "r",
+];
+const FILE_ACCEPT = TEXT_EXTENSIONS.map((e) => `.${e}`).join(",");
+const MAX_ATTACHMENTS = 6;
+const MAX_FILE_BYTES = 200 * 1024; // refuse bigger files
+const MAX_FILE_CHARS = 30000; // text kept per file (the backend enforces the same limit)
+const MAX_ATTACH_CHARS_TOTAL = 60000; // text sent per request, newest files first
+
+/** Reads one picked file. Returns { text, truncated } or { error }. */
+async function readTextAttachment(file) {
+  const ext = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "";
+  if (!TEXT_EXTENSIONS.includes(ext)) {
+    return { error: `${file.name}: only text files are supported for now (.txt, .md, .csv, .json, code…).` };
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    return { error: `${file.name} is too large (max ${MAX_FILE_BYTES / 1024} KB).` };
+  }
+  let text;
+  try {
+    text = await file.text();
+  } catch {
+    return { error: `Couldn't read ${file.name}.` };
+  }
+  if (text.includes("\u0000")) return { error: `${file.name} doesn't look like a text file.` };
+  if (!text.trim()) return { error: `${file.name} is empty.` };
+  const truncated = text.length > MAX_FILE_CHARS;
+  return { text: truncated ? text.slice(0, MAX_FILE_CHARS) : text, truncated };
+}
+
+/** Attachments to send with each message: text only, within the total budget (newest first). */
+function withAttachmentText(messages) {
+  let budget = MAX_ATTACH_CHARS_TOTAL;
+  const out = new Array(messages.length);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const { role, content, attachments } = messages[i];
+    const files = [];
+    if (role === "user") {
+      for (const a of attachments || []) {
+        if (!a.text || budget <= 0) continue;
+        const text = a.text.slice(0, budget);
+        budget -= text.length;
+        files.push({ name: a.name, text });
+      }
+    }
+    out[i] = { role, content, ...(files.length ? { attachments: files } : {}) };
+  }
+  return out;
+}
+
+async function* getReply(messages, { signal, model, mode }) {
   const res = await fetch(`${API_URL}/api/chat`, {
     method: "POST",
     signal,
-    credentials: "include", // sends your auth cookie
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: model?.id,
-      messages: messages.map(({ role, content }) => ({ role, content })),
+      ...(mode ? { mode } : {}),
+      messages: withAttachmentText(messages),
     }),
   });
 
@@ -290,8 +273,31 @@ const makeTitle = (s) => {
   return t.length > 34 ? `${t.slice(0, 34)}…` : t;
 };
 
-const firstNameOf = (user) => (user?.name || "").trim().split(" ")[0] || "there";
-const initialOf = (user) => (user?.name || user?.email || "?").trim().charAt(0).toUpperCase();
+/* ---- Saved chats (kept in this browser, no account needed) ---------------- */
+
+const STORAGE_KEY = "novaai_chats_v1";
+const MAX_STORED_CHATS = 100;
+
+function readStoredChats() {
+  try {
+    const list = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "[]");
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((c) => c && typeof c.id === "string" && Array.isArray(c.messages))
+      .map((c) => ({ id: c.id, title: c.title || "New Chat", messages: c.messages }));
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredChats(list) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, MAX_STORED_CHATS)));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /* ====================================================================== */
 /* 3D + motion helpers (same as ProductPage.js)                            */
@@ -615,103 +621,22 @@ function Brand() {
   );
 }
 
-const USER_MENU = [
-  { icon: User, label: "Profile", href: "#" },
-  { icon: Settings, label: "Settings", href: "#" },
-  { icon: ArrowLeft, label: "Back to home", href: "/" },
-];
-
-function UserMenu({ user, onLogout }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  const close = useCallback(() => setOpen(false), []);
-  useClickAway(ref, close, open);
-
+function HomeLink() {
   return (
-    <div ref={ref} className="relative">
-      <motion.button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        whileHover={{ y: -2 }}
-        whileTap={{ scale: 0.96 }}
-        className="flex items-center gap-2 rounded-full border border-white bg-white/90 py-1 pl-1 pr-3 shadow-[0_10px_24px_-12px_rgba(79,70,229,0.5)] outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+    <motion.div whileHover={{ y: -2 }} whileTap={{ scale: 0.96 }}>
+      <Link
+        href="/"
+        className="flex items-center gap-2 rounded-full border border-white bg-white/90 px-3.5 py-2 text-[13px] font-semibold text-[#0f1030] shadow-[0_10px_24px_-12px_rgba(79,70,229,0.5)] outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
       >
-        {user?.avatar ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={user.avatar}
-            alt=""
-            referrerPolicy="no-referrer"
-            className="h-8 w-8 rounded-full object-cover"
-          />
-        ) : (
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-200 to-indigo-300 text-sm font-bold text-indigo-700 shadow-inner">
-            {initialOf(user)}
-          </span>
-        )}
-        <span className="hidden max-w-[110px] truncate text-[13px] font-semibold text-[#0f1030] sm:block">
-          {firstNameOf(user)}
-        </span>
-        <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.3, ease: EASE }} className="text-gray-400">
-          <ChevronDown className="h-3.5 w-3.5" />
-        </motion.span>
-      </motion.button>
-
-      <AnimatePresence>
-        {open && (
-          <motion.ul
-            role="menu"
-            initial={{ opacity: 0, y: -10, rotateX: -18, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98, transition: { duration: 0.14 } }}
-            transition={{ duration: 0.3, ease: EASE }}
-            style={{ transformPerspective: 900, transformOrigin: "100% 0%" }}
-            className="absolute right-0 top-full z-50 mt-3 w-56 rounded-2xl border border-white/90 bg-white/90 p-1.5 shadow-[0_30px_70px_-24px_rgba(79,70,229,0.55)] backdrop-blur-2xl"
-          >
-            <li className="px-3 pb-2 pt-1.5">
-              <p className="truncate text-[13px] font-bold text-[#0f1030]">{user?.name}</p>
-              <p className="truncate text-[11.5px] text-gray-500">{user?.email}</p>
-            </li>
-            <li aria-hidden className="mx-2 mb-1 h-px bg-gradient-to-r from-transparent via-indigo-200 to-transparent" />
-
-            {USER_MENU.map(({ icon: Icon, label, href }) => (
-              <li key={label}>
-                <a
-                  role="menuitem"
-                  href={href}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium text-[#1b1b3a] outline-none transition-colors hover:bg-indigo-50 hover:text-indigo-600 focus-visible:bg-indigo-50"
-                >
-                  <Icon className="h-4 w-4 text-indigo-500" />
-                  {label}
-                </a>
-              </li>
-            ))}
-
-            <li>
-              <button
-                role="menuitem"
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  onLogout();
-                }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] font-medium text-[#1b1b3a] outline-none transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:bg-red-50"
-              >
-                <LogOut className="h-4 w-4 text-red-500" />
-                Log out
-              </button>
-            </li>
-          </motion.ul>
-        )}
-      </AnimatePresence>
-    </div>
+        <ArrowLeft className="h-4 w-4 text-indigo-500" />
+        <span className="hidden sm:inline">Back to home</span>
+        <span className="sm:hidden">Home</span>
+      </Link>
+    </motion.div>
   );
 }
 
-function TopBar({ query, setQuery, onOpenDrawer, user, onLogout }) {
+function TopBar({ query, setQuery, onOpenDrawer }) {
   return (
     <motion.header
       {...pop(0.05)}
@@ -756,20 +681,7 @@ function TopBar({ query, setQuery, onOpenDrawer, user, onLogout }) {
           )}
         </label>
 
-        <motion.button
-          type="button"
-          aria-label="Notifications"
-          whileHover={{ scale: 1.12, rotate: -8 }}
-          whileTap={{ scale: 0.9 }}
-          className="relative flex h-10 w-10 items-center justify-center rounded-full text-[#2b2e4a] outline-none transition-colors hover:bg-white hover:text-indigo-600 hover:shadow-md focus-visible:ring-2 focus-visible:ring-indigo-400"
-        >
-          <Bell className="h-[18px] w-[18px]" />
-          {NOTIFICATIONS_UNREAD && (
-            <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
-          )}
-        </motion.button>
-
-        <UserMenu user={user} onLogout={onLogout} />
+        <HomeLink />
       </div>
     </motion.header>
   );
@@ -888,40 +800,6 @@ function Sidebar({ variant = "desktop", chats, activeId, onSelect, onNew, onRemo
           <li className="px-3 py-6 text-center text-xs text-gray-500">No chats match &ldquo;{query}&rdquo;.</li>
         )}
       </ul>
-
-      {/* upgrade card */}
-      <Tilt
-        max={8}
-        lift={4}
-        scale={1.02}
-        glare
-        outerProps={pop(0.35)}
-        className="relative mt-3 shrink-0"
-        cardClassName="rounded-2xl border border-white/90 bg-gradient-to-br from-white/90 via-indigo-50/80 to-violet-100/80 p-4 shadow-[0_18px_40px_-18px_rgba(99,102,241,0.55)]"
-      >
-        <div className="flex items-center gap-2" style={{ transform: "translateZ(30px)" }}>
-          <span className="text-indigo-500">
-            <Sparkle4 className="h-4 w-4" />
-          </span>
-          <span className="text-[13px] font-bold text-[#0f1030]">Upgrade to Pro</span>
-        </div>
-        <p className="mt-1.5 text-[11.5px] leading-snug text-gray-500" style={{ transform: "translateZ(18px)" }}>
-          Get more models, higher limits and advanced features.
-        </p>
-        <a
-          href="/#pricing"
-          className="group relative mt-3 flex items-center justify-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-600 px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_12px_28px_-10px_rgba(79,70,229,0.75)] outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2"
-        >
-          <motion.span
-            aria-hidden
-            className="absolute inset-y-0 left-0 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/55 to-transparent"
-            animate={{ x: ["-150%", "450%"] }}
-            transition={{ duration: 2.2, repeat: Infinity, repeatDelay: 3, ease: "easeInOut" }}
-          />
-          <span className="relative">Upgrade Now</span>
-          <ArrowRight className="relative h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-1" />
-        </a>
-      </Tilt>
     </div>
   );
 }
@@ -1110,7 +988,9 @@ function SparkOrb({ mx, my }) {
   );
 }
 
-function Welcome({ mx, my, onPick, name }) {
+function Welcome({ mx, my, onPick, name, mode }) {
+  const cfg = mode ? MODES[mode] : null;
+  const suggestions = cfg ? cfg.suggestions : SUGGESTIONS;
   return (
     <div className="flex min-h-full flex-col items-center justify-center px-4 py-8 text-center" style={{ perspective: 1000 }}>
       <SparkOrb mx={mx} my={my} />
@@ -1125,11 +1005,11 @@ function Welcome({ mx, my, onPick, name }) {
       />
 
       <motion.p {...pop(0.55)} className="mt-3 max-w-sm text-sm leading-relaxed text-gray-500">
-        Ask me anything, get creative, or solve problems. I&apos;m here to help you.
+        {cfg ? cfg.intro : "Ask me anything, get creative, or solve problems. I'm here to help you."}
       </motion.p>
 
       <div className="mt-8 flex max-w-xl flex-wrap justify-center gap-3" style={{ perspective: 1200 }}>
-        {SUGGESTIONS.map((s, i) => (
+        {suggestions.map((s, i) => (
           <Tilt
             key={s.label}
             max={10}
@@ -1287,6 +1167,17 @@ const MSG_ENTER = {
 
 function Message({ msg, showRegenerate, onRegenerate }) {
   const [copied, copy] = useCopy(msg.content);
+  const { tts } = useVoiceSupport();
+  const [speaking, setSpeaking] = useState(false);
+  useEffect(() => () => setSpeaking(false), []);
+  const toggleSpeak = () => {
+    if (speaking) {
+      stopSpeaking();
+      setSpeaking(false);
+    } else if (speakText(msg.content, () => setSpeaking(false))) {
+      setSpeaking(true);
+    }
+  };
 
   if (msg.role === "user") {
     return (
@@ -1355,6 +1246,17 @@ function Message({ msg, showRegenerate, onRegenerate }) {
               {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
               {copied ? "Copied" : "Copy"}
             </button>
+            {tts && (
+              <button
+                type="button"
+                onClick={toggleSpeak}
+                aria-pressed={speaking}
+                className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium text-gray-500 outline-none transition-colors hover:bg-white hover:text-indigo-600 focus-visible:ring-2 focus-visible:ring-indigo-400"
+              >
+                {speaking ? <Square className="h-3 w-3 fill-current" /> : <Volume2 className="h-3 w-3" />}
+                {speaking ? "Stop" : "Listen"}
+              </button>
+            )}
             {showRegenerate && (
               <button
                 type="button"
@@ -1376,8 +1278,53 @@ function Message({ msg, showRegenerate, onRegenerate }) {
 /* Composer (input bar)                                                    */
 /* ====================================================================== */
 
-function Composer({ value, setValue, onSend, onStop, generating, attachments, setAttachments, taRef }) {
+function Composer({ value, setValue, onSend, onStop, generating, attachments, setAttachments, taRef, onError, placeholder }) {
   const fileRef = useRef(null);
+  const { stt } = useVoiceSupport();
+  const recRef = useRef(null);
+  const [listening, setListening] = useState(false);
+
+  // Dictation: speech is turned into text in the box; you still press Send.
+  const toggleMic = () => {
+    if (listening) {
+      recRef.current?.stop();
+      return;
+    }
+    const SR = getSpeechRecognition();
+    if (!SR) return onError?.("Voice input isn't supported in this browser. Try Chrome, Edge or Safari.");
+    stopSpeaking(); // don't listen to our own voice
+    const rec = new SR();
+    rec.lang = navigator.language || "en-US";
+    rec.interimResults = true;
+    rec.continuous = true;
+    const base = value ? `${value.replace(/\s+$/, "")} ` : "";
+    rec.onresult = (e) => {
+      let t = "";
+      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+      setValue(base + t);
+    };
+    rec.onerror = (e) => {
+      setListening(false);
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        onError?.("Microphone access is blocked. Allow it in your browser's site settings and try again.");
+      } else if (e.error !== "no-speech" && e.error !== "aborted") {
+        onError?.(`Voice input stopped (${e.error}).`);
+      }
+    };
+    rec.onend = () => setListening(false);
+    recRef.current = rec;
+    try {
+      rec.start();
+      setListening(true);
+    } catch {
+      setListening(false);
+    }
+  };
+  useEffect(() => () => recRef.current?.abort(), []);
+  const handleSend = () => {
+    recRef.current?.stop();
+    onSend();
+  };
   const canSend = value.trim().length > 0 || attachments.length > 0;
 
   // auto-grow the textarea up to a max height
@@ -1391,18 +1338,32 @@ function Composer({ value, setValue, onSend, onStop, generating, attachments, se
   const onKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      if (!generating) onSend();
+      if (!generating) handleSend();
     }
   };
 
-  const onFiles = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length) {
-      setAttachments((prev) =>
-        [...prev, ...files.map((f) => ({ id: uid(), name: f.name, file: f }))].slice(0, 6)
-      );
+  const onFiles = async (e) => {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = ""; // lets the same file be picked again later
+    if (!picked.length) return;
+
+    const room = Math.max(0, MAX_ATTACHMENTS - attachments.length);
+    if (room === 0) return onError?.(`You can attach up to ${MAX_ATTACHMENTS} files per message.`);
+
+    const added = [];
+    const problems = [];
+    for (const f of picked.slice(0, room)) {
+      const r = await readTextAttachment(f);
+      if (r.error) problems.push(r.error);
+      else {
+        added.push({ id: uid(), name: f.name, text: r.text, truncated: r.truncated });
+        if (r.truncated) problems.push(`${f.name} is long: only the first ${MAX_FILE_CHARS.toLocaleString()} characters will be used.`);
+      }
     }
-    e.target.value = "";
+    if (picked.length > room) problems.push(`Only ${MAX_ATTACHMENTS} files fit in one message.`);
+
+    if (added.length) setAttachments((prev) => [...prev, ...added].slice(0, MAX_ATTACHMENTS));
+    if (problems.length) onError?.(problems.join(" "));
   };
 
   const seed = (prefix) => {
@@ -1415,7 +1376,7 @@ function Composer({ value, setValue, onSend, onStop, generating, attachments, se
 
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <input ref={fileRef} type="file" multiple hidden onChange={onFiles} />
+      <input ref={fileRef} type="file" multiple hidden accept={FILE_ACCEPT} onChange={onFiles} />
 
       <motion.div
         {...pop(0.15)}
@@ -1457,7 +1418,8 @@ function Composer({ value, setValue, onSend, onStop, generating, attachments, se
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            aria-label="Attach file"
+            aria-label="Attach text file"
+            title="Attach text files (.txt, .md, .csv, .json, code)"
             className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-400 outline-none transition-colors hover:bg-indigo-50 hover:text-indigo-600 focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <Paperclip className="h-[18px] w-[18px]" />
@@ -1469,24 +1431,30 @@ function Composer({ value, setValue, onSend, onStop, generating, attachments, se
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Type your message here..."
+            placeholder={placeholder || "Type your message here..."}
             aria-label="Message"
             className="max-h-40 min-h-[40px] w-full resize-none bg-transparent py-2.5 text-[14px] leading-snug text-[#0f1030] outline-none placeholder:text-gray-400"
           />
 
-          <button
-            type="button"
-            onClick={() => seed("Generate an image of ")}
-            aria-label="Start an image prompt"
-            className="mb-0.5 hidden h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-400 outline-none transition-colors hover:bg-indigo-50 hover:text-indigo-600 focus-visible:ring-2 focus-visible:ring-indigo-400 sm:flex"
-          >
-            <ImageIcon className="h-[18px] w-[18px]" />
-          </button>
+          {stt && (
+            <button
+              type="button"
+              onClick={toggleMic}
+              aria-label={listening ? "Stop voice input" : "Start voice input"}
+              aria-pressed={listening}
+              title={listening ? "Stop listening" : "Dictate with your microphone"}
+              className={`mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                listening ? "animate-pulse bg-rose-50 text-rose-500" : "text-gray-400 hover:bg-indigo-50 hover:text-indigo-600"
+              }`}
+            >
+              <Mic className="h-[18px] w-[18px]" />
+            </button>
+          )}
 
           <Magnetic strength={0.2} className="mb-0.5 shrink-0">
             <motion.button
               type="button"
-              onClick={generating ? onStop : onSend}
+              onClick={generating ? onStop : handleSend}
               disabled={!generating && !canSend}
               aria-label={generating ? "Stop generating" : "Send message"}
               whileHover={{ scale: 1.1, rotate: generating ? 0 : -8 }}
@@ -1508,13 +1476,14 @@ function Composer({ value, setValue, onSend, onStop, generating, attachments, se
       </motion.div>
 
       <motion.div {...pop(0.25)} className="mt-2.5 flex flex-wrap items-center justify-center gap-2">
-        <button type="button" onClick={() => fileRef.current?.click()} className={chip}>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          title="Attach text files (.txt, .md, .csv, .json, code)"
+          className={chip}
+        >
           <Paperclip className="h-3.5 w-3.5" />
           Attach File
-        </button>
-        <button type="button" onClick={() => seed("Generate an image of ")} className={chip}>
-          <ImageIcon className="h-3.5 w-3.5" />
-          Image
         </button>
         <button type="button" onClick={() => seed("Write code that ")} className={chip}>
           <Code2 className="h-3.5 w-3.5" />
@@ -1533,7 +1502,7 @@ function Composer({ value, setValue, onSend, onStop, generating, attachments, se
 /* Page                                                                    */
 /* ====================================================================== */
 
-const freshChat = () => ({ id: uid(), title: "New Chat", messages: [] });
+const freshChat = () => ({ id: newChatId(), title: "New Chat", messages: [] });
 
 export default function ChatApp() {
   const rootRef = useRef(null);
@@ -1541,16 +1510,34 @@ export default function ChatApp() {
   const taRef = useRef(null);
   const aborts = useRef(new Map()); // chatId -> AbortController
 
-  const { user, logout } = useAuth();
-
-  const [chats, setChats] = useState(SEED);
-  const [activeId, setActiveId] = useState(SEED[0].id);
+  // Start on an empty draft chat. Saved chats are loaded from this browser below.
+  // A draft is only saved once it gets its first reply.
+  const [firstDraft] = useState(freshChat);
+  const [chats, setChats] = useState(() => [firstDraft]);
+  const [activeId, setActiveId] = useState(firstDraft.id);
+  const [notice, setNotice] = useState("");
+  const deletedIds = useRef(new Set()); // chats the user deleted (never re-save these)
   const [model, setModel] = useState(MODELS[0]);
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState([]);
   const [query, setQuery] = useState("");
   const [drawer, setDrawer] = useState(false);
   const [busy, setBusy] = useState({}); // chatId -> true while generating
+
+  // Mode from the URL (/chat?mode=code|docs|voice), set when you arrive from a product page
+  const [mode, setMode] = useState(null);
+  useEffect(() => {
+    // Read once after mount: the URL is not known while rendering on the server, and reading
+    // it during render would make the server and browser HTML differ (hydration mismatch).
+    const m = new URLSearchParams(window.location.search).get("mode");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (m && Object.hasOwn(MODES, m)) setMode(m);
+  }, []);
+  const leaveMode = () => {
+    setMode(null);
+    window.history.replaceState(null, "", window.location.pathname);
+  };
+  useEffect(() => () => stopSpeaking(), []);
 
   // mouse parallax for the background
   const rawX = useMotionValue(0);
@@ -1601,9 +1588,50 @@ export default function ChatApp() {
 
   const focusInput = () => setTimeout(() => taRef.current?.focus(), 60);
 
+  // ---- Saved conversations -------------------------------------------------
+
+  // Load the chats saved in this browser once. Anything already in state (the draft, or a chat
+  // started before this ran) stays on top.
+  useEffect(() => {
+    const stored = readStoredChats();
+    if (!stored.length) return;
+    // Browser-only data (localStorage) can only be read after mount; reading it during render
+    // would make the server and browser HTML differ (hydration mismatch).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setChats((prev) => {
+      const known = new Set(stored.map((c) => c.id));
+      return [...prev.filter((c) => !known.has(c.id)), ...stored];
+    });
+  }, []);
+
+  // auto-hide the small error toast
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(""), 6000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  // Save (create or replace) one chat in this browser. Called after each reply finishes.
+  const saveChat = useCallback((chatId, title, msgs) => {
+    if (deletedIds.current.has(chatId)) return;
+    const clean = msgs
+      // an empty assistant bubble (stopped before any text) is not worth keeping
+      .filter((m) => !(m.role === "assistant" && !m.content && !m.error))
+      .map(({ id, role, content, error, attachments }) => ({
+        id,
+        role,
+        content,
+        ...(error ? { error: true } : {}),
+        ...(attachments?.length ? { attachments: attachments.map(({ id, name }) => ({ id, name })) } : {}), // names only, never file text
+      }));
+    const rest = readStoredChats().filter((c) => c.id !== chatId);
+    const ok = writeStoredChats([{ id: chatId, title, messages: clean }, ...rest]);
+    if (!ok) setNotice("Couldn't save this chat in your browser. Your latest messages may be lost on refresh.");
+  }, []);
+
   /** Runs one assistant reply for `chatId`, streaming into message `botId`. */
   const run = useCallback(
-    async (chatId, botId, history) => {
+    async (chatId, botId, history, title) => {
       const ctrl = new AbortController();
       aborts.current.set(chatId, ctrl);
       setBusy((b) => ({ ...b, [chatId]: true }));
@@ -1615,16 +1643,32 @@ export default function ChatApp() {
           )
         );
 
+      let reply = ""; // full text so far, used to save the finished chat
+      let failed = false;
+
       try {
-        for await (const chunk of getReply(history, { signal: ctrl.signal, model })) {
+        for await (const chunk of getReply(history, { signal: ctrl.signal, model, mode })) {
+          reply += chunk;
           patch((m) => ({ ...m, content: m.content + chunk }));
         }
       } catch (err) {
         if (err?.name !== "AbortError") {
+          failed = true;
           patch((m) => ({ ...m, error: true, content: m.content || "Something went wrong. Please try again." }));
         }
+        // In voice mode the finished reply is read aloud automatically
+        if (mode === "voice" && reply) speakText(reply);
       } finally {
         patch((m) => ({ ...m, pending: false }));
+        saveChat(chatId, title, [
+          ...history,
+          {
+            id: botId,
+            role: "assistant",
+            content: reply || (failed ? "Something went wrong. Please try again." : ""),
+            error: failed,
+          },
+        ]);
         aborts.current.delete(chatId);
         setBusy((b) => {
           const next = { ...b };
@@ -1633,7 +1677,7 @@ export default function ChatApp() {
         });
       }
     },
-    [model]
+    [model, mode, saveChat]
   );
 
   const send = useCallback(
@@ -1642,16 +1686,19 @@ export default function ChatApp() {
       const files = typeof override === "string" ? [] : attachments;
       if ((!content && files.length === 0) || !activeChat || busy[activeChat.id]) return;
 
+      stopSpeaking();
       const chatId = activeChat.id;
       const userMsg = {
         id: uid(),
         role: "user",
         content,
-        attachments: files.map(({ id, name }) => ({ id, name })),
+        // `text` stays in memory so follow-up questions still include the file; it is never saved
+        attachments: files.map(({ id, name, text, truncated }) => ({ id, name, text, truncated })),
       };
       const botId = uid();
       const botMsg = { id: botId, role: "assistant", content: "", pending: true };
       const history = [...activeChat.messages, userMsg];
+      const title = activeChat.messages.length === 0 ? makeTitle(content || files[0]?.name) : activeChat.title;
 
       setChats((prev) =>
         prev.map((c) =>
@@ -1659,26 +1706,20 @@ export default function ChatApp() {
             ? c
             : {
                 ...c,
-                title: c.messages.length === 0 ? makeTitle(content || files[0]?.name) : c.title,
+                title,
                 messages: [...c.messages, userMsg, botMsg],
               }
         )
       );
       setText("");
       if (typeof override !== "string") setAttachments([]);
-      run(chatId, botId, history);
+      run(chatId, botId, history, title);
     },
     [text, attachments, activeChat, busy, run]
   );
 
   const stop = () => {
     if (activeChat) aborts.current.get(activeChat.id)?.abort();
-  };
-
-  const handleLogout = async () => {
-    aborts.current.forEach((c) => c.abort()); // stop any running replies
-    await logout();
-    // ProtectedRoute sees the user is gone and sends them to /login
   };
 
   const regenerate = () => {
@@ -1702,7 +1743,7 @@ export default function ChatApp() {
           : { ...c, messages: [...history, { id: botId, role: "assistant", content: "", pending: true }] }
       )
     );
-    run(activeChat.id, botId, history);
+    run(activeChat.id, botId, history, activeChat.title);
   };
 
   const newChat = () => {
@@ -1726,6 +1767,12 @@ export default function ChatApp() {
   };
 
   const removeChat = (id) => {
+    const target = chats.find((c) => c.id === id);
+    // Drafts that never got a message were never saved, so there is nothing to delete.
+    if (target && target.messages.length > 0) {
+      deletedIds.current.add(id); // stops the aborted reply below from re-saving it
+      writeStoredChats(readStoredChats().filter((c) => c.id !== id));
+    }
     aborts.current.get(id)?.abort();
     const next = chats.filter((c) => c.id !== id);
     if (next.length === 0) {
@@ -1750,13 +1797,28 @@ export default function ChatApp() {
       >
         <Background mx={mx} my={my} />
 
+        {notice && (
+          <div
+            role="status"
+            className="fixed bottom-4 left-1/2 z-50 flex max-w-[90vw] -translate-x-1/2 items-center gap-3 rounded-2xl border border-red-200 bg-white/95 px-4 py-2.5 text-sm text-red-700 shadow-lg backdrop-blur"
+          >
+            <span>{notice}</span>
+            <button
+              type="button"
+              onClick={() => setNotice("")}
+              aria-label="Dismiss"
+              className="font-semibold text-red-500 hover:text-red-700"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="relative z-10 flex h-full flex-col gap-3 p-2.5 sm:p-4">
           <TopBar
             query={query}
             setQuery={setQuery}
             onOpenDrawer={() => setDrawer(true)}
-            user={user}
-            onLogout={handleLogout}
           />
 
           <div className="flex min-h-0 flex-1 gap-3 sm:gap-4">
@@ -1782,7 +1844,22 @@ export default function ChatApp() {
               <PanelDecor />
 
               <div className="relative z-20 flex items-center justify-between gap-3 px-4 pt-4 sm:px-6">
-                <ModelSelect value={model} onChange={setModel} />
+                <div className="flex min-w-0 items-center gap-2">
+                  <ModelSelect value={model} onChange={setModel} />
+                  {mode && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-indigo-100 bg-indigo-50 py-1 pl-3 pr-1.5 text-[11.5px] font-semibold text-indigo-600">
+                      {MODES[mode].label}
+                      <button
+                        type="button"
+                        onClick={leaveMode}
+                        aria-label={`Leave ${MODES[mode].label}`}
+                        className="flex h-4 w-4 items-center justify-center rounded-full outline-none hover:bg-indigo-100 focus-visible:ring-2 focus-visible:ring-indigo-400"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                </div>
                 <motion.button
                   type="button"
                   onClick={newChat}
@@ -1801,7 +1878,8 @@ export default function ChatApp() {
                     key={activeChat?.id}
                     mx={mx}
                     my={my}
-                    name={firstNameOf(user)}
+                    name="there"
+                    mode={mode}
                     onPick={(p) => send(p)}
                   />
                 ) : (
@@ -1825,9 +1903,11 @@ export default function ChatApp() {
                   onSend={() => send()}
                   onStop={stop}
                   generating={generating}
+                  onError={setNotice}
                   attachments={attachments}
                   setAttachments={setAttachments}
                   taRef={taRef}
+                  placeholder={mode ? MODES[mode].placeholder : undefined}
                 />
               </div>
             </motion.main>

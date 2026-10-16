@@ -1,11 +1,11 @@
-// frontend/src/components/auth/AuthShell.js
+// frontend/src/components/shared/PageShell.js
 "use client";
 
 /**
- * Shared layout for the Login and Signup pages.
+ * Shared glass page layout (used by the newsletter confirm / unsubscribe pages).
  *
  * Usage:
- *   <AuthShell
+ *   <PageShell
  *     badge="Welcome back"
  *     heading={[{ text: "Log" }, { text: "in" }, { text: "to", }, { br: true }, { text: "NovaAI.", gradient: "from-blue-500 to-violet-600" }]}
  *     subtext="..."
@@ -13,8 +13,8 @@
  *     cardText="Enter your details to continue."
  *     footer={<p>...</p>}
  *   >
- *     <LoginForm />
- *   </AuthShell>
+ *     <YourContent />
+ *   </PageShell>
  *
  * Needs: framer-motion, lucide-react, Tailwind.
  */
@@ -77,17 +77,17 @@ export function LogoMark({ className = "h-6 w-6" }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden>
       <defs>
-        <linearGradient id="auth-logo-a" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id="shell-logo-a" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#3b82f6" />
           <stop offset="1" stopColor="#7c3aed" />
         </linearGradient>
-        <linearGradient id="auth-logo-b" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id="shell-logo-b" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#f472b6" />
           <stop offset="1" stopColor="#fb923c" />
         </linearGradient>
       </defs>
-      <path d="M12 3 L21 20 H16.5 L12 11.5 L7.5 20 H3 Z" fill="url(#auth-logo-a)" />
-      <path d="M12 14.6 L14.1 20 H9.9 Z" fill="url(#auth-logo-b)" />
+      <path d="M12 3 L21 20 H16.5 L12 11.5 L7.5 20 H3 Z" fill="url(#shell-logo-a)" />
+      <path d="M12 14.6 L14.1 20 H9.9 Z" fill="url(#shell-logo-b)" />
     </svg>
   );
 }
@@ -196,13 +196,13 @@ const WAVES = [
   {
     from: "M0,190 C200,90 420,300 720,210 C1020,120 1240,260 1440,170 L1440,400 L0,400 Z",
     to: "M0,240 C220,150 440,260 720,170 C1000,100 1220,300 1440,210 L1440,400 L0,400 Z",
-    fill: "url(#auth-wave-a)",
+    fill: "url(#shell-wave-a)",
     duration: 11,
   },
   {
     from: "M0,270 C260,210 520,330 800,270 C1080,210 1260,320 1440,260 L1440,400 L0,400 Z",
     to: "M0,240 C280,320 540,240 800,300 C1060,360 1260,230 1440,300 L1440,400 L0,400 Z",
-    fill: "url(#auth-wave-b)",
+    fill: "url(#shell-wave-b)",
     duration: 13,
   },
 ];
@@ -284,12 +284,12 @@ function Background({ mx, my }) {
       <motion.div style={{ x: wavesX }} className="absolute -inset-x-10 bottom-0 h-[34%]">
         <svg viewBox="0 0 1440 400" preserveAspectRatio="none" className="h-full w-full">
           <defs>
-            <linearGradient id="auth-wave-a" x1="0" y1="0" x2="1" y2="1">
+            <linearGradient id="shell-wave-a" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0" stopColor="#c7d2fe" stopOpacity="0.75" />
               <stop offset="0.5" stopColor="#bae6fd" stopOpacity="0.6" />
               <stop offset="1" stopColor="#e9d5ff" stopOpacity="0.75" />
             </linearGradient>
-            <linearGradient id="auth-wave-b" x1="1" y1="0" x2="0" y2="1">
+            <linearGradient id="shell-wave-b" x1="1" y1="0" x2="0" y2="1">
               <stop offset="0" stopColor="#f5d0fe" stopOpacity="0.7" />
               <stop offset="0.55" stopColor="#c4b5fd" stopOpacity="0.55" />
               <stop offset="1" stopColor="#93c5fd" stopOpacity="0.7" />
@@ -533,7 +533,7 @@ function TiltCard({ children, className = "" }) {
 /* Shell                                                                   */
 /* ====================================================================== */
 
-export default function AuthShell({
+export default function PageShell({
   badge,
   heading,
   subtext,

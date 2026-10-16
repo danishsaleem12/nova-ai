@@ -1,8 +1,18 @@
 @import "tailwindcss";
 
+/*
+ * The whole site is designed on light backgrounds (white cards, pastel gradients, dark text).
+ * It has no dark theme, so it stays light even when the visitor's system is set to dark mode.
+ *
+ * Before: a `prefers-color-scheme: dark` block made the page background #0a0a0a and the default
+ * text #ededed. Any text that inherits its colour then turned light grey on white cards (about
+ * 1.2:1 contrast, unreadable), and dark gaps showed between the light sections. If you want a real
+ * dark mode later, it needs dark variants for each component, not just these two variables.
+ */
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #171717; /* 17.9:1 contrast on white */
+  color-scheme: light; /* keeps browser-drawn UI (scrollbars, form controls) light too */
 }
 
 @theme inline {
@@ -12,15 +22,83 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Geist is loaded by next/font in layout.js; the rest is the fallback while it loads */
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* ---------------------------------------------------------------------------------------
+ * Cross-device behaviour
+ * ------------------------------------------------------------------------------------- */
+
+html {
+  /* Stops iOS Safari / Android Chrome from inflating text when the phone is rotated */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Anchor links (#features ...) don't hide under the fixed navbar */
+  scroll-padding-top: 6rem;
+}
+
+body {
+  /* Last-resort guard: a decorative blob or wide element can never create sideways scrolling
+     on a phone. "clip" (unlike "hidden") doesn't break position: sticky. */
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Remove the grey flash when tapping buttons/links on mobile browsers, and make taps respond
+   instantly (no 300 ms double-tap-zoom delay) without disabling pinch-zoom. */
+a,
+button,
+[role="button"],
+summary,
+label,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* iOS zooms into inputs whose font is under 16px. Keep them at 16px on touch screens only. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* Tall sections use the *dynamic* viewport on phones so they are not cut off behind the
+   collapsing address bar (100vh is taller than what is actually visible there). */
+@supports (height: 100dvh) {
+  .min-h-screen {
+    min-height: 100dvh;
+  }
+}
+
+/* Visitors who asked their device for less motion get (almost) no animation. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Printing: no fixed navbar covering the first page */
+@media print {
+  nav,
+  header {
+    position: static !important;
+  }
 }

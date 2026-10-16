@@ -1,15 +1,6 @@
 import { notFound } from "next/navigation";
 import AgentsPage from "@/components/AgentsPage";
-
-// Slug -> agent name. The full content for each agent lives in AgentsPage.js
-// (keyed by the same slugs). Add a new agent here and there.
-const AGENTS = {
-  "research-agent": "Research Agent",
-  "coding-agent": "Coding Agent",
-  "marketing-agent": "Marketing Agent",
-  "automation-agent": "Automation Agent",
-  "custom-agent": "Custom Agents",
-};
+import { AGENTS } from "@/data/agents";
 
 export function generateStaticParams() {
   return Object.keys(AGENTS).map((slug) => ({ slug }));

@@ -18,7 +18,7 @@
  *                       DEMO.fallbackHref (default /chat).
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom"; // NEW: modal is rendered on document.body
 import {
   AnimatePresence, // NEW: modal enter/exit animation
@@ -1007,8 +1007,12 @@ function DemoButton({ href, onOpen }) {
  * Navbar (the hero section uses `isolate`, which would trap its z-index).
  */
 function DemoModal({ open, onClose }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []); // portal needs the browser (no SSR)
+  // true in the browser, false while server-rendering: the portal needs document.body
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   // Esc to close + lock page scroll while open
   useEffect(() => {

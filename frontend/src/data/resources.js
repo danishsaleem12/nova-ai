@@ -233,7 +233,7 @@ export const RESOURCES = {
       { icon: "zap", label: "Billing", desc: "Plans, invoices, refunds" },
       { icon: "shield", label: "Account & security", desc: "Login, 2FA, data access" },
       { icon: "code", label: "API & agents", desc: "Errors, limits, run status" },
-      { icon: "message", label: "Talk to a person", desc: "Live chat, weekdays 8–8" },
+      { icon: "message", label: "Talk to a person", desc: "Live chat, weekdays 8–8", href: "mailto:support@novaai.example" },
     ],
     console: {
       kind: "faq",

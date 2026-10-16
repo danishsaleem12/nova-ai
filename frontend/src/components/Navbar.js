@@ -11,14 +11,14 @@
  *
  * Needs: framer-motion, lucide-react, Tailwind (v3.2+ for group/item).
  * All labels, links and dropdown items are in the DATA block below.
- * Section ids used by the active-link highlight: #home and #pricing.
+ * Section ids used by the active-link highlight: #home.
  *
  * Features
  *  - Floating glass pill with gloss, cursor spotlight, light sweep and scroll progress line
  *  - 4 dropdowns (hover on desktop, click/tap/keyboard everywhere), sliding hover highlight
  *  - Search panel with live results (Ctrl/Cmd + K to open, Esc to close)
  *  - Mobile menu with accordion groups
- *  - Auth: Login / Get Started buttons when logged out, avatar + account menu when logged in
+ *  - A single "Get Started" button that opens the chat app (no login / signup)
  *
  * NOTE: the "Product" group's items link to real routes
  *   (/product/ai-chat, /product/ai-image, etc.) matching the slugs in
@@ -32,8 +32,8 @@
  *   components/ResourcesPage.js.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { usePathname } from "next/navigation";
 import {
   AnimatePresence,
   MotionConfig,
@@ -58,7 +58,6 @@ import {
   FileText,
   Image as ImageIcon,
   LifeBuoy,
-  LogOut,
   Megaphone,
   Menu,
   MessageCircle,
@@ -73,7 +72,6 @@ import {
   Workflow,
   X,
 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
 
 const EASE = [0.22, 1, 0.36, 1];
 
@@ -82,10 +80,9 @@ const EASE = [0.22, 1, 0.36, 1];
 /* ====================================================================== */
 
 const BRAND = { first: "Nova", second: "AI", href: "/#home" };
-const LOGIN = { label: "Login", href: "/login" };
-const CTA = { label: "Get Started", href: "/signup" };
+const CTA = { label: "Get Started", href: "/chat" };
 const SEARCH_PLACEHOLDER = "Search AI tools, agents, docs...";
-const POPULAR = ["AI Chat", "Image Generator", "Research Agent", "Documentation"];
+const POPULAR = ["AI Chat", "AI Code", "AI Documents", "Documentation"];
 
 // Items with `items` become dropdowns. Items with only `href` are plain links.
 const NAV = [
@@ -97,10 +94,10 @@ const NAV = [
     items: [
       // hrefs match the slugs (object keys) in src/data/products.js exactly
       { icon: MessageCircle, label: "AI Chat", text: "Talk to a smart assistant", href: "/product/ai-chat" },
-      { icon: ImageIcon, label: "AI Image", text: "Create stunning visuals", href: "/product/ai-image" },
-      { icon: Mic, label: "AI Voice", text: "Speak, listen, transcribe", href: "/product/ai-voice" },
-      { icon: FileText, label: "AI Documents", text: "Read, write and edit files", href: "/product/ai-documents" },
-      { icon: Code2, label: "AI Code", text: "Ship code faster", href: "/product/ai-code" },
+      { icon: ImageIcon, label: "AI Image", text: "Coming soon", href: "/product/ai-image" },
+      { icon: Mic, label: "AI Voice", text: "Speak and listen", href: "/product/ai-voice" },
+      { icon: FileText, label: "AI Documents", text: "Summarize and rewrite text", href: "/product/ai-documents" },
+      { icon: Code2, label: "AI Code", text: "Explain, debug and write code", href: "/product/ai-code" },
     ],
   },
   {
@@ -111,7 +108,7 @@ const NAV = [
       // hrefs match the slugs (object keys) in the TOOLS map in
       // app/components/AIToolPage.js exactly
       { icon: Pencil, label: "AI Writer", text: "Blogs, emails and more", href: "/ai-tools/ai-writer" },
-      { icon: Wand2, label: "Image Generator", text: "Turn ideas into art", href: "/ai-tools/image-generator" },
+      { icon: Wand2, label: "Image Generator", text: "Coming soon", href: "/ai-tools/image-generator" },
       { icon: BarChart3, label: "Data Analyzer", text: "Find insights instantly", href: "/ai-tools/data-analyzer" },
       { icon: Terminal, label: "Code Assistant", text: "Write, explain and fix code", href: "/ai-tools/code-assistant" },
       { icon: AlignLeft, label: "AI Summarizer", text: "Long text made short", href: "/ai-tools/ai-summarizer" },
@@ -124,11 +121,11 @@ const NAV = [
     items: [
       // hrefs match the slugs (object keys) in the AGENTS map in
       // app/components/AgentsPage.js exactly
-      { icon: FileSearch, label: "Research Agent", text: "Deep research on demand", href: "/agents/research-agent" },
-      { icon: Cpu, label: "Coding Agent", text: "Builds and debugs for you", href: "/agents/coding-agent" },
-      { icon: Megaphone, label: "Marketing Agent", text: "Campaigns on autopilot", href: "/agents/marketing-agent" },
-      { icon: Workflow, label: "Automation Agent", text: "Automate repeat work", href: "/agents/automation-agent" },
-      { icon: Puzzle, label: "Custom Agents", text: "Build your own agent", href: "/agents/custom-agent" },
+      { icon: FileSearch, label: "Research Agent", text: "Coming soon", href: "/agents/research-agent" },
+      { icon: Cpu, label: "Coding Agent", text: "Coming soon", href: "/agents/coding-agent" },
+      { icon: Megaphone, label: "Marketing Agent", text: "Coming soon", href: "/agents/marketing-agent" },
+      { icon: Workflow, label: "Automation Agent", text: "Coming soon", href: "/agents/automation-agent" },
+      { icon: Puzzle, label: "Custom Agents", text: "Coming soon", href: "/agents/custom-agent" },
     ],
   },
   {
@@ -145,7 +142,6 @@ const NAV = [
       { icon: Users, label: "Community", text: "Meet other creators", href: "/resources/community" },
     ],
   },
-  { id: "pricing", label: "Pricing", href: "/#pricing" },
 ];
 
 // Flat list used by the search panel.
@@ -296,21 +292,6 @@ function Brand() {
   );
 }
 
-function LoginButton() {
-  return (
-    <Magnetic>
-      <motion.a
-        href={LOGIN.href}
-        whileHover={{ scale: 1.06, y: -3 }}
-        whileTap={{ scale: 0.95 }}
-        className="inline-flex items-center rounded-full border border-indigo-100 bg-white/90 px-5 py-2.5 text-[13.5px] font-semibold text-[#1b1b3a] shadow-[0_10px_24px_-10px_rgba(79,70,229,0.4)] transition-shadow duration-300 hover:shadow-[0_18px_36px_-10px_rgba(79,70,229,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2"
-      >
-        {LOGIN.label}
-      </motion.a>
-    </Magnetic>
-  );
-}
-
 function CtaButton({ block = false }) {
   const btn = (
     <motion.a
@@ -356,122 +337,6 @@ function SearchButton({ open, onClick }) {
     </motion.button>
   );
 }
-
-/* ====================================================================== */
-/* Signed-in user: avatar + account menu                                   */
-/* ====================================================================== */
-
-function Avatar({ user, size = 36 }) {
-  const initial = (user?.name || user?.email || "?").trim().charAt(0).toUpperCase();
-  return user?.avatar ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={user.avatar}
-      alt=""
-      referrerPolicy="no-referrer"
-      className="rounded-full object-cover ring-2 ring-white"
-      style={{ width: size, height: size }}
-    />
-  ) : (
-    <span
-      className="flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 font-bold text-white ring-2 ring-white"
-      style={{ width: size, height: size, fontSize: size * 0.42 }}
-    >
-      {initial}
-    </span>
-  );
-}
-
-function UserMenu({ user, open, onToggle, onClose, onLogout }) {
-  const firstName = (user.name || "").trim().split(" ")[0] || "Account";
-
-  return (
-    <div className="relative">
-      <motion.button
-        type="button"
-        onClick={onToggle}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        whileHover={{ scale: 1.04, y: -2 }}
-        whileTap={{ scale: 0.96 }}
-        className="flex items-center gap-2 rounded-full border border-indigo-100 bg-white/90 py-1.5 pl-1.5 pr-3.5 text-[13.5px] font-semibold text-[#1b1b3a] shadow-[0_10px_24px_-10px_rgba(79,70,229,0.4)] transition-shadow duration-300 hover:shadow-[0_18px_36px_-10px_rgba(79,70,229,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2"
-      >
-        <Avatar user={user} size={30} />
-        <span className="max-w-[110px] truncate">{firstName}</span>
-        <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.3, ease: EASE }}>
-          <ChevronDown className="h-3.5 w-3.5 text-indigo-500" />
-        </motion.span>
-      </motion.button>
-
-      <AnimatePresence>
-        {open && (
-          <div key="user-panel" className="absolute right-0 top-full z-50 w-64 pt-4">
-            <motion.div
-              role="menu"
-              aria-label="Account"
-              variants={PANEL}
-              initial="hidden"
-              animate="show"
-              exit="exit"
-              style={{ transformPerspective: 900, transformOrigin: "85% 0%" }}
-              className="relative rounded-3xl border border-white/90 bg-white/90 p-2.5 shadow-[0_40px_90px_-24px_rgba(79,70,229,0.5)] backdrop-blur-2xl"
-            >
-              <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
-                <span className="absolute inset-x-0 top-0 h-2/5 bg-gradient-to-b from-white/90 to-transparent" />
-                <span className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-violet-300/30 blur-2xl" />
-                <span className="absolute -bottom-12 -left-10 h-32 w-32 rounded-full bg-sky-300/30 blur-2xl" />
-              </div>
-
-              <motion.div variants={ITEM} className="relative flex items-center gap-3 px-2.5 pb-3 pt-2">
-                <Avatar user={user} size={40} />
-                <div className="min-w-0">
-                  <p className="truncate text-[14px] font-bold text-[#0f1030]">{user.name}</p>
-                  <p className="truncate text-[12px] text-gray-500">{user.email}</p>
-                </div>
-              </motion.div>
-
-              <span className="relative mx-2 mb-1.5 block h-px bg-gradient-to-r from-transparent via-indigo-200 to-transparent" />
-
-              <motion.div variants={ITEM} className="relative">
-                <motion.a
-                  role="menuitem"
-                  href="/chat"
-                  onClick={onClose}
-                  whileHover={{ x: 4 }}
-                  className="group/item flex items-center gap-3 rounded-2xl px-2.5 py-2 text-[13.5px] font-semibold text-[#0f1030] outline-none transition-colors hover:bg-indigo-50 focus-visible:ring-2 focus-visible:ring-indigo-400"
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-600 shadow-sm transition-transform duration-700 group-hover/item:[transform:perspective(300px)_rotateY(360deg)]">
-                    <MessageCircle className="h-[18px] w-[18px]" />
-                  </span>
-                  Open chat
-                </motion.a>
-              </motion.div>
-
-              <motion.div variants={ITEM} className="relative">
-                <motion.button
-                  role="menuitem"
-                  type="button"
-                  onClick={onLogout}
-                  whileHover={{ x: 4 }}
-                  className="group/item flex w-full items-center gap-3 rounded-2xl px-2.5 py-2 text-left text-[13.5px] font-semibold text-[#0f1030] outline-none transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-red-300"
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-100 text-red-500 shadow-sm transition-transform duration-700 group-hover/item:[transform:perspective(300px)_rotateY(360deg)]">
-                    <LogOut className="h-[18px] w-[18px]" />
-                  </span>
-                  Log out
-                </motion.button>
-              </motion.div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-/* ====================================================================== */
-/* Dropdown panel                                                          */
-/* ====================================================================== */
 
 function DropdownPanel({ group, onNavigate, onEscape }) {
   const [hi, setHi] = useState(null);
@@ -857,7 +722,7 @@ function SearchPanel({ onClose }) {
 /* Mobile menu                                                             */
 /* ====================================================================== */
 
-function MobileMenu({ active, onNavigate, onActivate, user, loading, onLogout }) {
+function MobileMenu({ active, onNavigate, onActivate }) {
   const [openGroup, setOpenGroup] = useState(null);
 
   return (
@@ -867,7 +732,7 @@ function MobileMenu({ active, onNavigate, onActivate, user, loading, onLogout })
       exit={{ opacity: 0, y: -8, scale: 0.98, transition: { duration: 0.16 } }}
       transition={{ duration: 0.4, ease: EASE }}
       style={{ transformPerspective: 900, transformOrigin: "50% 0%" }}
-      className="relative max-h-[calc(100vh-6.5rem)] overflow-y-auto rounded-3xl border border-white/90 bg-white/90 p-3 shadow-[0_40px_90px_-24px_rgba(79,70,229,0.55)] backdrop-blur-2xl"
+      className="relative max-h-[calc(100dvh-6.5rem)] overflow-y-auto rounded-3xl border border-white/90 bg-white/90 p-3 shadow-[0_40px_90px_-24px_rgba(79,70,229,0.55)] backdrop-blur-2xl"
     >
       <ul className="space-y-1">
         {NAV.map((item) =>
@@ -937,47 +802,7 @@ function MobileMenu({ active, onNavigate, onActivate, user, loading, onLogout })
       </ul>
 
       <div className="mt-3 border-t border-indigo-100/70 pt-3">
-        {loading ? (
-          <div className="h-12 animate-pulse rounded-full bg-indigo-50" />
-        ) : user ? (
-          <>
-            <div className="flex items-center gap-3 rounded-2xl bg-indigo-50/60 px-3 py-2.5">
-              <Avatar user={user} size={40} />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-[#0f1030]">{user.name}</p>
-                <p className="truncate text-xs text-gray-500">{user.email}</p>
-              </div>
-            </div>
-            <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-              <a
-                href="/chat"
-                onClick={onNavigate}
-                className="inline-flex items-center justify-center rounded-full border border-indigo-100 bg-white px-5 py-2.5 text-sm font-semibold text-[#1b1b3a] shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-              >
-                Open chat
-              </a>
-              <button
-                type="button"
-                onClick={onLogout}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-red-50 px-5 py-2.5 text-sm font-semibold text-red-600 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
-              >
-                <LogOut className="h-4 w-4" />
-                Log out
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="grid grid-cols-2 gap-2.5">
-            <a
-              href={LOGIN.href}
-              onClick={onNavigate}
-              className="inline-flex items-center justify-center rounded-full border border-indigo-100 bg-white px-5 py-2.5 text-sm font-semibold text-[#1b1b3a] shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-            >
-              {LOGIN.label}
-            </a>
-            <CtaButton block />
-          </div>
-        )}
+        <CtaButton block />
       </div>
     </motion.div>
   );
@@ -987,18 +812,23 @@ function MobileMenu({ active, onNavigate, onActivate, user, loading, onLogout })
 /* Navbar                                                                  */
 /* ====================================================================== */
 
+function subscribeToScroll(callback) {
+  window.addEventListener("scroll", callback, { passive: true });
+  return () => window.removeEventListener("scroll", callback);
+}
+const getScrolled = () => window.scrollY > 16;
+
 export default function Navbar() {
   const navRef = useRef(null);
   const closeTimer = useRef(null);
   const pathname = usePathname();
-  const router = useRouter();
-  const { user, loading, logout } = useAuth();
 
-  const [openId, setOpenId] = useState(null); // "product" | "tools" | ... | "search" | "user" | null
+  const [openId, setOpenId] = useState(null); // "product" | "tools" | ... | "search" | null
   const [mobileOpen, setMobileOpen] = useState(false);
   const [hovered, setHovered] = useState(null);
   const [active, setActive] = useState("home");
-  const [scrolled, setScrolled] = useState(false);
+  // true once the page is scrolled a little (shrinks the bar, stronger glass)
+  const scrolled = useSyncExternalStore(subscribeToScroll, getScrolled, () => false);
 
   // cursor spotlight on the pill
   const mxp = useMotionValue(0);
@@ -1035,25 +865,6 @@ export default function Navbar() {
     setOpenId(null);
     setMobileOpen((v) => !v);
   };
-  const toggleUser = () => {
-    clearTimeout(closeTimer.current);
-    setMobileOpen(false);
-    setOpenId((cur) => (cur === "user" ? null : "user"));
-  };
-  const handleLogout = async () => {
-    closeAll();
-    await logout();
-    router.push("/");
-  };
-
-  // shrink + stronger glass after scrolling
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 16);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
   // keyboard shortcuts + outside click + resize
   useEffect(() => {
     const onKey = (e) => {
@@ -1082,12 +893,8 @@ export default function Navbar() {
 
   // highlight the link whose section is on screen
   useEffect(() => {
-    // on product pages no section link should look active
-    if (pathname !== "/") {
-      setActive(null);
-      return;
-    }
-    setActive("home");
+    // on product pages no section link should look active (see `activeLink` below)
+    if (pathname !== "/") return;
     const targets = NAV.filter((n) => n.href && n.href.startsWith("/#"))
       .map((n) => ({ id: n.id, el: document.querySelector(n.href.slice(1)) }))
       .filter((t) => t.el);
@@ -1103,8 +910,13 @@ export default function Navbar() {
       { rootMargin: "-40% 0px -55% 0px" }
     );
     targets.forEach((t) => io.observe(t.el));
-    return () => io.disconnect();
+    return () => {
+      io.disconnect();
+      setActive("home"); // back on the home page the first link is lit again
+    };
   }, [pathname]);
+
+  const activeLink = pathname === "/" ? active : null;
 
   const onPillMove = (e) => {
     if (e.pointerType !== "mouse") return;
@@ -1113,7 +925,7 @@ export default function Navbar() {
     myp.set(e.clientY - r.top);
   };
 
-  const menuOpen = openId && openId !== "search" && openId !== "user" ? openId : null;
+  const menuOpen = openId && openId !== "search" ? openId : null;
   const litId = hovered ?? menuOpen;
   const searchOpen = openId === "search";
 
@@ -1194,7 +1006,7 @@ export default function Navbar() {
                 <NavEntry
                   key={item.id}
                   item={item}
-                  active={active}
+                  active={activeLink}
                   lit={litId === item.id}
                   open={openId === item.id}
                   onHover={setHovered}
@@ -1209,22 +1021,7 @@ export default function Navbar() {
             <motion.div variants={POP} className="flex items-center gap-1.5 sm:gap-2.5">
               <SearchButton open={searchOpen} onClick={toggleSearch} />
               <div className="hidden items-center gap-2.5 lg:flex">
-                {loading ? (
-                  <span className="h-10 w-40 animate-pulse rounded-full bg-white/70" />
-                ) : user ? (
-                  <UserMenu
-                    user={user}
-                    open={openId === "user"}
-                    onToggle={toggleUser}
-                    onClose={closeAll}
-                    onLogout={handleLogout}
-                  />
-                ) : (
-                  <>
-                    <LoginButton />
-                    <CtaButton />
-                  </>
-                )}
+                <CtaButton />
               </div>
               <motion.button
                 type="button"
@@ -1267,12 +1064,9 @@ export default function Navbar() {
             {mobileOpen && (
               <div key="mobile" className="absolute inset-x-0 top-full z-50 pt-3 lg:hidden">
                 <MobileMenu
-                  active={active}
+                  active={activeLink}
                   onNavigate={closeAll}
                   onActivate={setActive}
-                  user={user}
-                  loading={loading}
-                  onLogout={handleLogout}
                 />
               </div>
             )}

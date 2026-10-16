@@ -7,14 +7,13 @@
  *   import Testimonials from "./components/Testimonials";
  *   <Testimonials />
  *
- * IMPORTANT: the names, quotes, company marks and numbers below are
- * PLACEHOLDERS copied from a design mockup. Replace them with your real
- * clients, real quotes and real numbers (and remove the company marks you
- * don't have permission to show) before you publish the site.
+ * DEMO CONTENT: every name, quote, company and number below is fictional
+ * (this is a demo project). The companies are invented and use generic
+ * letter-badge marks, so no real brand logos or trademarks are shown.
  * Everything you need to edit is in the DATA block right below.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   AnimatePresence,
   MotionConfig,
@@ -56,12 +55,13 @@ const STATS = [
   { icon: ShieldCheck, value: 99.9, decimals: 1, suffix: "%", label: "Uptime" },
 ];
 
+// Fictional demo companies (not real brands). `brand` is a key into DEMO_BRANDS below.
 const STRIP = [
-  { brand: "microsoft", label: "Microsoft" },
-  { brand: "google", label: "Google" },
-  { brand: "spotify", label: "Spotify" },
-  { brand: "notion", label: "Notion" },
-  { brand: "figma", label: "Figma" },
+  { brand: "brightlabs", label: "BrightLabs" },
+  { brand: "novatech", label: "NovaTech" },
+  { brand: "pixelcraft", label: "PixelCraft" },
+  { brand: "cloudnine", label: "CloudNine" },
+  { brand: "loopify", label: "Loopify" },
 ];
 
 // brand: which mark shows in the card's corner (or leave it out for none).
@@ -69,44 +69,44 @@ const STRIP = [
 const TESTIMONIALS = [
   {
     name: "Alex Carter",
-    role: "Product Designer, Google",
+    role: "Product Designer, BrightLabs",
     quote: "This platform has completely changed the way I work. The AI tools are incredibly powerful and easy to use.",
-    brand: "google",
+    brand: "brightlabs",
     tone: "from-sky-400 to-blue-500",
   },
   {
     name: "Sarah Mitchell",
     role: "Founder, NovaTech",
     quote: "The AI agents are a game changer! They handle repetitive work so I can focus on what really matters.",
-    brand: "notion",
+    brand: "novatech",
     tone: "from-pink-400 to-rose-500",
   },
   {
     name: "James Wilson",
     role: "CTO, PixelCraft",
     quote: "Incredible platform with so many useful tools. The workspace is clean, fast and super intuitive.",
-    brand: "microsoft",
+    brand: "pixelcraft",
     tone: "from-indigo-400 to-violet-500",
   },
   {
     name: "Emily Rodriguez",
-    role: "Marketing Lead, BrightLabs",
+    role: "Marketing Lead, Quillstone",
     quote: "I've tried many AI tools, but this one brings everything together. It's powerful, flexible and reliable.",
-    brand: "slack",
+    brand: "quillstone",
     tone: "from-amber-400 to-orange-500",
   },
   {
     name: "Daniel Kim",
     role: "Engineering Manager, CloudNine",
     quote: "Setup took minutes and the whole team was productive the same day. The support has been fantastic.",
-    brand: "figma",
+    brand: "cloudnine",
     tone: "from-emerald-400 to-teal-500",
   },
   {
     name: "Priya Sharma",
     role: "Head of Growth, Loopify",
     quote: "We automated our weekly reporting and now save hours every single week. It just works.",
-    brand: "spotify",
+    brand: "loopify",
     tone: "from-fuchsia-400 to-purple-500",
   },
   {
@@ -117,85 +117,53 @@ const TESTIMONIALS = [
   },
   {
     name: "Aisha Khan",
-    role: "Operations Lead, Northwind",
+    role: "Operations Lead, Northbeam",
     quote: "Our workflows are smoother than ever, and our customers have noticed the difference.",
-    brand: "microsoft",
+    brand: "northbeam",
     tone: "from-rose-400 to-pink-500",
   },
 ];
 
 /* ====================================================================== */
-/* Brand marks (simplified glyphs)                                         */
+/* Demo brand marks (fictional companies, generic letter badges)           */
 /* ====================================================================== */
 
+const DEMO_BRANDS = {
+  brightlabs: { letter: "B", from: "#38bdf8", to: "#3b82f6" },
+  novatech: { letter: "N", from: "#f472b6", to: "#e11d48" },
+  pixelcraft: { letter: "P", from: "#818cf8", to: "#7c3aed" },
+  quillstone: { letter: "Q", from: "#fbbf24", to: "#f97316" },
+  cloudnine: { letter: "C", from: "#34d399", to: "#0d9488" },
+  loopify: { letter: "L", from: "#e879f9", to: "#9333ea" },
+  northbeam: { letter: "N", from: "#fb7185", to: "#ec4899" },
+};
+
 function BrandMark({ brand, className = "h-5 w-5" }) {
-  const common = { viewBox: "0 0 24 24", className, "aria-hidden": true };
-  switch (brand) {
-    case "google":
-      return (
-        <svg {...common}>
-          <defs>
-            <linearGradient id="tm-google" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#4285f4" />
-              <stop offset="0.45" stopColor="#ea4335" />
-              <stop offset="0.75" stopColor="#fbbc05" />
-              <stop offset="1" stopColor="#34a853" />
-            </linearGradient>
-          </defs>
-          <text x="12" y="20" textAnchor="middle" fontSize="23" fontWeight="800" fill="url(#tm-google)" fontFamily="Arial, sans-serif">
-            G
-          </text>
-        </svg>
-      );
-    case "microsoft":
-      return (
-        <svg {...common}>
-          <rect x="2" y="2" width="9.5" height="9.5" fill="#f25022" />
-          <rect x="12.5" y="2" width="9.5" height="9.5" fill="#7fba00" />
-          <rect x="2" y="12.5" width="9.5" height="9.5" fill="#00a4ef" />
-          <rect x="12.5" y="12.5" width="9.5" height="9.5" fill="#ffb900" />
-        </svg>
-      );
-    case "notion":
-      return (
-        <svg {...common}>
-          <rect x="3" y="3" width="18" height="18" rx="3" fill="#fff" stroke="#111827" strokeWidth="1.8" />
-          <text x="12" y="17" textAnchor="middle" fontSize="13" fontWeight="800" fill="#111827" fontFamily="Georgia, serif">
-            N
-          </text>
-        </svg>
-      );
-    case "slack":
-      return (
-        <svg {...common}>
-          <rect x="10" y="2" width="4" height="9" rx="2" fill="#36c5f0" />
-          <rect x="13" y="10" width="9" height="4" rx="2" fill="#2eb67d" />
-          <rect x="10" y="13" width="4" height="9" rx="2" fill="#ecb22e" />
-          <rect x="2" y="10" width="9" height="4" rx="2" fill="#e01e5a" />
-        </svg>
-      );
-    case "spotify":
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="12" r="10" fill="#1db954" />
-          <path d="M6.5 9.2c3.6-1 7.6-.7 10.8 1.1" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" fill="none" />
-          <path d="M7.2 12.4c3-.8 6.2-.5 8.9.9" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" fill="none" />
-          <path d="M7.9 15.4c2.4-.6 4.8-.4 6.8.7" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" fill="none" />
-        </svg>
-      );
-    case "figma":
-      return (
-        <svg {...common}>
-          <rect x="6" y="2" width="6" height="6" rx="3" fill="#f24e1e" />
-          <rect x="12" y="2" width="6" height="6" rx="3" fill="#ff7262" />
-          <rect x="6" y="8" width="6" height="6" rx="3" fill="#a259ff" />
-          <circle cx="15" cy="11" r="3" fill="#1abcfe" />
-          <rect x="6" y="14" width="6" height="6" rx="3" fill="#0acf83" />
-        </svg>
-      );
-    default:
-      return null;
-  }
+  const b = DEMO_BRANDS[brand];
+  if (!b) return null;
+  const id = `tm-demo-${brand}`;
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={b.from} />
+          <stop offset="1" stopColor={b.to} />
+        </linearGradient>
+      </defs>
+      <rect x="1" y="1" width="22" height="22" rx="6" fill={`url(#${id})`} />
+      <text
+        x="12"
+        y="16.5"
+        textAnchor="middle"
+        fontSize="13"
+        fontWeight="700"
+        fontFamily="system-ui, sans-serif"
+        fill="#fff"
+      >
+        {b.letter}
+      </text>
+    </svg>
+  );
 }
 
 /* ====================================================================== */
@@ -925,15 +893,15 @@ function TestimonialCard({ item, index, dir }) {
   );
 }
 
+// How many testimonial cards fit per page. Read straight from the window width.
+function subscribeToResize(callback) {
+  window.addEventListener("resize", callback);
+  return () => window.removeEventListener("resize", callback);
+}
+const getVisibleCount = () => (window.innerWidth >= 1024 ? 4 : window.innerWidth >= 640 ? 2 : 1);
+
 function useVisibleCount() {
-  const [count, setCount] = useState(4);
-  useEffect(() => {
-    const calc = () => setCount(window.innerWidth >= 1024 ? 4 : window.innerWidth >= 640 ? 2 : 1);
-    calc();
-    window.addEventListener("resize", calc);
-    return () => window.removeEventListener("resize", calc);
-  }, []);
-  return count;
+  return useSyncExternalStore(subscribeToResize, getVisibleCount, () => 4);
 }
 
 const PAGE_VARIANTS = {
@@ -971,9 +939,13 @@ function Carousel() {
   const [paused, setPaused] = useState(false);
   const current = Math.min(page, pages - 1);
 
-  useEffect(() => {
+  // Back to the first page when the layout changes (e.g. the window is resized across a
+  // breakpoint). Adjusting state while rendering is the React-approved alternative to an effect.
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (prevVisible !== visible) {
+    setPrevVisible(visible);
     setPage(0);
-  }, [visible]);
+  }
 
   const goTo = useCallback(
     (next) => {

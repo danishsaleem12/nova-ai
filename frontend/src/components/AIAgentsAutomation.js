@@ -56,7 +56,7 @@ const EASE = [0.22, 1, 0.36, 1];
 
 const BRAND = "NovaAI";
 
-const BADGE = "AI Agents & Automation";
+const BADGE = "AI Agents (coming soon)";
 const HEADING = [
   { text: "Let" },
   { text: "AI" },
@@ -65,9 +65,9 @@ const HEADING = [
   { text: "the work.", gradient: "from-sky-500 via-indigo-500 to-violet-500" },
 ];
 const SUBTEXT =
-  "Give AI a goal and watch intelligent agents research, analyze, create and execute — automatically.";
+  "We're building AI agents that can research, analyze, create and carry out tasks for you. Agents are coming soon; the scene below is a preview.";
 
-const SIDE_BADGE = "Intelligent Agents";
+const SIDE_BADGE = "In development";
 const SIDE_HEADING = [
   { text: "Specialized" },
   { text: "AI" },
@@ -76,7 +76,7 @@ const SIDE_HEADING = [
   { text: "for every task." },
 ];
 const SIDE_TEXT =
-  "From research to automation, our AI agents work together to turn your goals into real results — faster than ever.";
+  "Specialized agents for research, coding, marketing and automation are on our roadmap. Today you can use AI Chat, which is live.";
 
 const CHECKS = [
   "Expert agents for different use cases",
@@ -85,7 +85,7 @@ const CHECKS = [
   "Get high-quality, consistent results",
 ];
 
-const CTA_LABEL = "Explore AI Agents";
+const CTA_LABEL = "See the agents preview";
 
 /* Pipeline row across the top of the visual scene. */
 const PIPELINE_STEPS = [
@@ -320,11 +320,7 @@ function CountUp({ to, decimals = 0, prefix = "", suffix = "", delay = 0.4, raw 
   const [text, setText] = useState(raw ? "" : (0).toFixed(decimals));
 
   useEffect(() => {
-    if (!inView) return;
-    if (raw != null) {
-      setText(raw);
-      return;
-    }
+    if (!inView || raw != null) return; // a `raw` label is shown directly below, no counting
     const controls = animate(0, to, {
       duration: 1.6,
       delay,
@@ -337,7 +333,7 @@ function CountUp({ to, decimals = 0, prefix = "", suffix = "", delay = 0.4, raw 
   return (
     <span ref={ref}>
       {prefix}
-      {text}
+      {raw != null ? (inView ? raw : "") : text}
       {suffix}
     </span>
   );
@@ -991,14 +987,16 @@ function CodingDemo({ replayKey }) {
 
   useEffect(() => {
     if (!inView) return;
-    setLineCount(0);
     let i = 0;
     const id = setInterval(() => {
       i += 1;
       setLineCount(i);
       if (i >= CODING_SNIPPET.length) clearInterval(id);
     }, 260);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      setLineCount(0); // start from the first line again on replay / re-entry
+    };
   }, [inView, replayKey]);
 
   return (

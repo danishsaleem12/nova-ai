@@ -23,6 +23,8 @@
 
 import { useEffect, useState } from "react";
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import Navbar from "./Navbar";
 import { MotionConfig, motion } from "framer-motion";
 import {
   ArrowUpRight,
@@ -37,6 +39,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Footer from "./Footer"; // adjust the path if your Footer lives elsewhere
+import { CONTACT } from "@/lib/site";
 
 const EASE = [0.22, 1, 0.36, 1];
 
@@ -56,19 +59,19 @@ const SHOW_FOOTER = true;
 /* ====================================================================== */
 
 const COMPANY = "NovaAI";
-const LAST_UPDATED = "October 7, 2026";
-const EFFECTIVE = "October 7, 2026";
+const LAST_UPDATED = "October 16, 2026";
+const EFFECTIVE = "October 16, 2026";
 
-// Replace with your real addresses / legal entity details.
+// Demo contact details (fictional), shared with the rest of the site via lib/site.js.
 const C = {
-  privacy: "privacy@novaai.com",
-  legal: "legal@novaai.com",
-  security: "security@novaai.com",
-  dpo: "dpo@novaai.com",
-  support: "support@novaai.com",
-  entity: "NovaAI, Inc.",
-  address: "[Your registered business address]",
-  jurisdiction: "[Your governing jurisdiction]",
+  privacy: CONTACT.privacy,
+  legal: CONTACT.legal,
+  security: CONTACT.security,
+  dpo: CONTACT.dpo,
+  support: CONTACT.support,
+  entity: CONTACT.entity,
+  address: CONTACT.address,
+  jurisdiction: CONTACT.jurisdiction,
 };
 
 // Tiny helpers so the content below stays readable.
@@ -872,7 +875,7 @@ function Toc({ sections, activeId, onJump }) {
         <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-600">On this page</span>
       </div>
 
-      <ul className="max-h-[calc(100vh-14rem)] space-y-0.5 overflow-y-auto pr-1">
+      <ul className="max-h-[calc(100dvh-14rem)] space-y-0.5 overflow-y-auto pr-1">
         {sections.map((s, i) => {
           const isActive = activeId === s.id;
           return (
@@ -1048,24 +1051,28 @@ function RelatedPages({ currentSlug }) {
 
 export default function LegalPage({ slug }) {
   const page = LEGAL[slug];
-  const [activeId, setActiveId] = useState(page?.sections[0]?.id ?? null);
+  // null = "no section seen yet", which shows the first section as active
+  const [seenId, setSeenId] = useState(null);
+  const activeId = seenId ?? page?.sections[0]?.id ?? null;
 
   // highlight the section currently in view
   useEffect(() => {
     if (!page) return;
-    setActiveId(page.sections[0].id);
     const els = page.sections.map((s) => document.getElementById(s.id)).filter(Boolean);
     if (!els.length) return;
     const io = new IntersectionObserver(
       (entries) => {
         entries.forEach((en) => {
-          if (en.isIntersecting) setActiveId(en.target.id);
+          if (en.isIntersecting) setSeenId(en.target.id);
         });
       },
       { rootMargin: "-20% 0px -70% 0px" }
     );
     els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
+    return () => {
+      io.disconnect();
+      setSeenId(null); // a different legal page starts at its first section
+    };
   }, [page]);
 
   // smooth jump that also updates the URL hash
@@ -1107,13 +1114,13 @@ export default function LegalPage({ slug }) {
             <ContactCard page={page} />
             <RelatedPages currentSlug={slug} />
 
-            <a
+            <Link
               href="/"
               className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-indigo-600 transition-colors hover:text-blue-600"
             >
               <ChevronRight className="h-4 w-4 rotate-180" />
               Back to home
-            </a>
+            </Link>
           </div>
         </div>
       </main>
@@ -1123,12 +1130,7 @@ export default function LegalPage({ slug }) {
   );
 }
 
-/**
- * Optional: only used when SHOW_NAVBAR is true. Imported lazily so the file
- * works even if you never turn it on.
- */
+/** Optional: only rendered when SHOW_NAVBAR is true (the root layout already shows the Navbar). */
 function NavbarSlot() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const Navbar = require("./Navbar").default;
   return <Navbar />;
 }

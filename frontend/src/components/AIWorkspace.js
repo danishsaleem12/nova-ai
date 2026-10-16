@@ -137,25 +137,25 @@ const FLOAT_CARDS = [
 const DASH_NAV = [
   { icon: Home, label: "Home", active: true },
   { icon: MessageCircle, label: "Chat" },
-  { icon: ImageIcon, label: "Image Generator" },
+  { icon: ImageIcon, label: "Image (soon)" },
   { icon: Pencil, label: "AI Writer" },
   { icon: BarChart3, label: "Data Analysis" },
-  { icon: Bot, label: "Agents" },
-  { icon: Zap, label: "Automation" },
+  { icon: Bot, label: "Agents (soon)" },
+  { icon: Zap, label: "Automation (soon)" },
 ];
 
 const PROMPTS = ["Ask anything...", "Plan a product launch", "Summarize this report", "Write a welcome email"];
 
 const QUICK = [
   { icon: MessageCircle, title: "Chat", text: "Talk with AI", bg: "from-blue-100 to-sky-50", chip: "bg-blue-500" },
-  { icon: ImageIcon, title: "Generate", text: "Create images", bg: "from-violet-100 to-fuchsia-50", chip: "bg-violet-500" },
+  { icon: ImageIcon, title: "Generate", text: "Coming soon", bg: "from-violet-100 to-fuchsia-50", chip: "bg-violet-500" },
   { icon: Pencil, title: "Write", text: "Create content", bg: "from-emerald-100 to-teal-50", chip: "bg-emerald-500" },
   { icon: BarChart3, title: "Analyze", text: "Get insights", bg: "from-orange-100 to-amber-50", chip: "bg-orange-400" },
 ];
 
 const ACTIVITY = [
   { icon: MessageCircle, text: "Marketing strategy plan", time: "2 hours ago", tone: "bg-blue-100 text-blue-600" },
-  { icon: ImageIcon, text: "Image generation (landscape)", time: "4 hours ago", tone: "bg-violet-100 text-violet-600" },
+  { icon: MessageCircle, text: "Weekly report summary", time: "4 hours ago", tone: "bg-violet-100 text-violet-600" },
   { icon: BarChart3, text: "Data analysis report", time: "6 hours ago", tone: "bg-indigo-100 text-indigo-600" },
 ];
 
@@ -1119,7 +1119,7 @@ function useStageMetrics(ref) {
       const wide = w < 520;
       setM({ scale: (w * (wide ? 0.86 : 0.66)) / DESIGN_W, wide });
     };
-    calc();
+    // ResizeObserver reports the initial size as soon as observing starts, so no direct call
     const ro = new ResizeObserver(calc);
     ro.observe(el);
     return () => ro.disconnect();

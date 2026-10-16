@@ -12,7 +12,6 @@ export class ApiError extends Error {
 
 /**
  * Small fetch wrapper for the backend.
- * - sends the httpOnly auth cookie (credentials: "include")
  * - always returns parsed JSON, or throws an ApiError with a readable message
  */
 export async function api(path, { method = "GET", body, headers } = {}) {
@@ -20,7 +19,6 @@ export async function api(path, { method = "GET", body, headers } = {}) {
   try {
     res = await fetch(`${BASE_URL}${path}`, {
       method,
-      credentials: "include",
       headers: {
         ...(body ? { "Content-Type": "application/json" } : {}),
         ...headers,
@@ -44,11 +42,10 @@ export async function api(path, { method = "GET", body, headers } = {}) {
   return data;
 }
 
-// Auth endpoints in one place
-export const authApi = {
-  signup: (payload) => api("/api/auth/signup", { method: "POST", body: payload }),
-  login: (payload) => api("/api/auth/login", { method: "POST", body: payload }),
-  google: (credential) => api("/api/auth/google", { method: "POST", body: { credential } }),
-  logout: () => api("/api/auth/logout", { method: "POST" }),
-  me: () => api("/api/auth/me"),
+// Newsletter (public)
+export const newsletterApi = {
+  subscribe: (email, source) =>
+    api("/api/newsletter/subscribe", { method: "POST", body: { email, ...(source ? { source } : {}) } }),
+  confirm: (token) => api("/api/newsletter/confirm", { method: "POST", body: { token } }),
+  unsubscribe: (token) => api("/api/newsletter/unsubscribe", { method: "POST", body: { token } }),
 };

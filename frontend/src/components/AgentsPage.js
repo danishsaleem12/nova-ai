@@ -874,36 +874,34 @@ function useTypewriter(text, active, resetKey, speed = 16) {
   const reduce = useReducedMotion();
   const [n, setN] = useState(0);
   useEffect(() => {
-    if (!active) {
-      setN(0);
-      return;
-    }
-    if (reduce) {
-      setN(text.length);
-      return;
-    }
-    setN(0);
+    if (!active || reduce) return;
     let i = 0;
     const id = setInterval(() => {
       i += 2;
       setN(Math.min(i, text.length));
       if (i >= text.length) clearInterval(id);
     }, speed);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      setN(0); // restart from the beginning when the text / trigger changes
+    };
   }, [text, active, resetKey, reduce, speed]);
-  return text.slice(0, n);
+  const shown = !active ? 0 : reduce ? text.length : n;
+  return text.slice(0, shown);
 }
 
 /** True `ms` after `active` becomes true (resets when `key` changes). */
 function useDelayed(active, ms, key) {
   const [on, setOn] = useState(false);
   useEffect(() => {
-    setOn(false);
     if (!active) return;
     const t = setTimeout(() => setOn(true), ms);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      setOn(false);
+    };
   }, [active, ms, key]);
-  return on;
+  return active && on;
 }
 
 /** idle -> loading -> done state machine for the demos. */
@@ -1743,6 +1741,19 @@ function Hero({ agent, theme, mx, my }) {
             </motion.span>
           </div>
 
+          <div
+            role="note"
+            className="mt-5 flex max-w-xl items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-[13px] leading-relaxed text-amber-900 shadow-sm"
+          >
+            <span className="mt-0.5 shrink-0 rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+              Coming soon
+            </span>
+            <span>
+              {agent.name} isn&apos;t available yet. This page shows what we&apos;re building, and the demo below is a
+              simulated preview.
+            </span>
+          </div>
+
           <div style={{ perspective: 1000 }}>
             <Heading3D
               as="h1"
@@ -1771,7 +1782,7 @@ function Hero({ agent, theme, mx, my }) {
                   animate={{ x: ["-150%", "450%"] }}
                   transition={{ duration: 2.2, repeat: Infinity, repeatDelay: 2.6, ease: "easeInOut" }}
                 />
-                <span className="relative">{agent.cta}</span>
+                <span className="relative">See the preview</span>
                 <ArrowRight className="relative h-4 w-4 transition-transform duration-300 group-hover:translate-x-1.5" />
               </motion.a>
             </Magnetic>
@@ -1805,6 +1816,9 @@ function Hero({ agent, theme, mx, my }) {
 
         {/* interactive demo, floating in 3D */}
         <div id="try" className="relative scroll-mt-28" style={{ perspective: 1400 }}>
+          <p className="mx-auto mb-3 max-w-[560px] text-center text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+            Simulated preview: not a live agent
+          </p>
           <motion.div style={{ rotateX, rotateY, transformStyle: "preserve-3d" }} className="relative mx-auto max-w-[560px]">
             <Demo agent={agent} theme={theme} />
           </motion.div>
@@ -2237,7 +2251,7 @@ function FlipCard({ item, theme, index }) {
               href="#try"
               className="relative inline-flex w-fit items-center gap-1.5 rounded-full bg-white/95 px-4 py-2 text-xs font-bold text-[#0f1030] shadow-md transition-transform hover:scale-105"
             >
-              Try it <ArrowRight className="h-3.5 w-3.5" />
+              See preview <ArrowRight className="h-3.5 w-3.5" />
             </a>
           </div>
         </motion.div>
@@ -2466,7 +2480,7 @@ function FinalCta({ agent, theme }) {
                   whileTap={{ scale: 0.95 }}
                   className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-[#0f1030] shadow-xl transition-shadow hover:shadow-2xl"
                 >
-                  {agent.cta}
+                  See the preview
                   <ArrowRight className="h-4 w-4" />
                 </motion.a>
               </Magnetic>

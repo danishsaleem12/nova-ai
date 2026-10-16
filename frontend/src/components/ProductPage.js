@@ -472,7 +472,7 @@ function Badge({ text }) {
   );
 }
 
-function CTAButton({ gradient, href = "#" }) {
+function CTAButton({ gradient, href = "#", label = "Try it now" }) {
   return (
     <Magnetic>
       <motion.a
@@ -487,10 +487,31 @@ function CTAButton({ gradient, href = "#" }) {
           animate={{ x: ["-150%", "450%"] }}
           transition={{ duration: 2.2, repeat: Infinity, repeatDelay: 2.6, ease: "easeInOut" }}
         />
-        <span className="relative">Try it now</span>
+        <span className="relative">{label}</span>
         <ArrowRight className="relative h-5 w-5 transition-transform duration-300 group-hover:translate-x-1.5" />
       </motion.a>
     </Magnetic>
+  );
+}
+
+// Shown instead of the CTA for products that aren't built yet (product.soon).
+function ComingSoon({ note }) {
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <span
+        aria-disabled="true"
+        className="inline-flex cursor-not-allowed items-center gap-2 rounded-full border border-indigo-100 bg-white/80 px-8 py-4 text-base font-semibold text-indigo-400 shadow-sm"
+      >
+        Coming soon
+      </span>
+      {note && <p className="max-w-md text-xs leading-relaxed text-gray-500">{note}</p>}
+      <a
+        href="/chat"
+        className="text-sm font-semibold text-indigo-600 underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-indigo-400"
+      >
+        Try AI Chat in the meantime
+      </a>
+    </div>
   );
 }
 
@@ -582,7 +603,11 @@ export default function ProductPage({ slug }) {
             </Reveal3D>
 
             <Reveal3D delay={0.75} className="mt-8 flex justify-center">
-              <CTAButton gradient={product.gradient} href={product.ctaHref} />
+              {product.soon ? (
+                <ComingSoon note={product.soonNote} />
+              ) : (
+                <CTAButton gradient={product.gradient} href={product.ctaHref} label={product.ctaLabel} />
+              )}
             </Reveal3D>
           </div>
 

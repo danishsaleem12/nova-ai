@@ -19,6 +19,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { newsletterApi } from "@/lib/api";
 import {
   AnimatePresence,
   MotionConfig,
@@ -248,6 +249,7 @@ const RESOURCES = {
     ctaText: "One email a week with the posts worth your time. No spam, unsubscribe in one click.",
     ctaPlaceholder: "you@company.com",
     ctaButton: "Subscribe",
+    newsletter: true, // this CTA is the real newsletter signup (the other resources' CTAs are still demo-only)
   },
 
   /* ----------------------------- Documentation ----------------------------- */
@@ -862,8 +864,7 @@ function FeedDemo({ data, palette }) {
   const inView = useInView(ref, { once: true, amount: 0.4 });
 
   useEffect(() => {
-    if (!inView) return;
-    setLoading(true);
+    if (!inView) return; // `loading` already starts as true
     const t = setTimeout(() => setLoading(false), 650);
     return () => clearTimeout(t);
   }, [inView]);
@@ -1051,10 +1052,13 @@ function EndpointDemo({ data, palette }) {
     }, 1100);
   }, [data.latencyMs]);
 
+  // Runs the demo once when it scrolls into view. The timeout keeps the state updates out of
+  // the effect body itself.
   useEffect(() => {
-    if (inView) send();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inView]);
+    if (!inView) return;
+    const t = setTimeout(send, 0);
+    return () => clearTimeout(t);
+  }, [inView, send]);
 
   return (
     <ConsolePanel
@@ -1363,7 +1367,7 @@ function QuickLinks({ resource, palette }) {
           const QIcon = ICONS[q.icon];
           return (
             <TiltCard key={q.label} as="li" max={5} lift={5} outerProps={riseIn(i * 0.06)}>
-              <a href="#" className="block h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+              <a href={q.href || "#console"} className="block h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
                 <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${palette.faint} ${palette.ink}`}>
                   <QIcon className="h-4.5 w-4.5" />
                 </span>
@@ -1638,11 +1642,34 @@ function OtherResources({ resource }) {
 function SubscribeCta({ resource, palette }) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    if (!email.trim()) return;
-    setSent(true);
+    if (busy) return;
+    const clean = email.trim();
+    if (!clean) return;
+
+    // Only the newsletter CTA talks to the server; the others stay as before
+    if (!resource.newsletter) {
+      setSent(true);
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(clean)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await newsletterApi.subscribe(clean, resource.slug || "ai-blog");
+      setSent(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -1657,23 +1684,35 @@ function SubscribeCta({ resource, palette }) {
 
             {sent ? (
               <p className="mt-7 inline-flex items-center gap-2 rounded-full bg-white/15 px-5 py-3 text-sm font-semibold">
-                <Check className="h-4 w-4" /> You're set — check your inbox.
+                <Check className="h-4 w-4" />{" "}
+                {resource.newsletter ? "Almost there — check your inbox to confirm." : "You're set — check your inbox."}
               </p>
             ) : (
               <form onSubmit={submit} className="mt-7 flex max-w-md flex-col gap-3 sm:flex-row">
                 <input
-                  type="text"
+                  type={resource.newsletter ? "email" : "text"}
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (error) setError("");
+                  }}
+                  disabled={busy}
+                  aria-label={resource.newsletter ? "Email address" : undefined}
+                  aria-invalid={Boolean(error)}
                   placeholder={resource.ctaPlaceholder}
                   className="min-w-0 flex-1 rounded-full border-0 bg-white/95 px-5 py-3 text-sm text-slate-900 shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-white"
                 />
                 <Press>
                   <button type="submit" className="inline-flex items-center justify-center gap-1.5 rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-lg">
-                    {resource.ctaButton} <ArrowRight className="h-4 w-4" />
+                    {busy ? "Sending..." : resource.ctaButton} <ArrowRight className="h-4 w-4" />
                   </button>
                 </Press>
               </form>
+            )}
+            {error && (
+              <p role="alert" className="mt-3 max-w-md rounded-xl bg-black/25 px-4 py-2 text-sm font-medium text-white">
+                {error}
+              </p>
             )}
           </div>
         </div>
@@ -1686,7 +1725,14 @@ function Footnote({ resource }) {
   return (
     <div className="flex flex-col items-center gap-3 pb-16 text-sm text-slate-400">
       <span>{resource.name} · part of the NovaAI resource library</span>
-      <a href="#" className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-800">
+      <a
+        href="#"
+        onClick={(e) => {
+          e.preventDefault();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+        className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-800"
+      >
         Back to top <ChevronDown className="h-3.5 w-3.5 rotate-180" />
       </a>
     </div>

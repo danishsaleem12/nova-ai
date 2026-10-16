@@ -71,7 +71,7 @@ function Typewriter({ text }) {
         }, 2600);
       }
     };
-    tick();
+    timer = setTimeout(tick, 0); // first step on the next tick, not synchronously in the effect
     return () => clearTimeout(timer);
   }, [inView, reduce, text]);
 

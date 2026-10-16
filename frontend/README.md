@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# NovaAI — Frontend
 
-## Getting Started
+The web app for **NovaAI**: a marketing site plus an AI chat app (no login or signup needed). Built with
+[Next.js](https://nextjs.org) (App Router), React 19, Tailwind CSS 4 and Framer Motion.
+It talks to the Express API in the `backend` project.
 
-First, run the development server:
+## Features
+
+- **Marketing site**: landing page with hero, product suite, agents and testimonials.
+- **Content pages** generated from data files: `/product/[slug]`, `/ai-tools/[slug]`, `/agents/[slug]`, `/resources/[slug]`.
+- **Legal pages**: privacy policy, terms of service, cookies, GDPR, security.
+- **AI chat** (`/chat`): streamed replies, model picker, text-file attachments, chats saved in the visitor's own browser (localStorage), so they are private to that device and need no account.
+- **Newsletter**: subscribe, confirm and unsubscribe flows.
+- **SEO**: per-page metadata, `robots.txt`, `sitemap.xml` and generated Open Graph images.
+- **Error handling**: custom 404, error and loading screens.
+
+## Requirements
+
+- Node.js 20.9 or newer
+- The [backend](../backend) running (default `http://localhost:5000`)
+
+## Getting started
 
 ```bash
+npm install
+cp .env.local.example .env.local   # then edit the values (see below)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://localhost:3000>.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Set these in `.env.local` (development) or in your host's settings (production).
+Every variable starts with `NEXT_PUBLIC_`, so its value is visible in the browser: never put secrets here.
 
-## Learn More
+| Variable | Required | Description |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | Yes | Base URL of the backend, e.g. `http://localhost:5000`. No trailing slash. |
+| `NEXT_PUBLIC_SITE_URL` | In production | Public address of this site, e.g. `https://novaai.com`. Used for the sitemap, `robots.txt` and Open Graph image URLs. Defaults to `http://localhost:3000`. |
 
-To learn more about Next.js, take a look at the following resources:
+`NEXT_PUBLIC_*` values are baked in at build time, so rebuild after changing them.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Scripts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Start the dev server with hot reload |
+| `npm run build` | Create the production build |
+| `npm start` | Serve the production build |
+| `npm run lint` | Run ESLint |
 
-## Deploy on Vercel
+## Project structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/
+  app/                 Routes (App Router)
+    page.js            Landing page
+    chat/              AI chat (open to everyone, chats saved in the browser)
+    product/[slug]/, ai-tools/[slug]/, agents/[slug]/, resources/[slug]/
+    newsletter/        confirm + unsubscribe pages
+    privacy-policy/, terms-of-service/, cookies/, gdpr/, security/
+    not-found.js, error.js, global-error.js, loading.js
+    robots.js, sitemap.js, opengraph-image.js
+  components/          UI components (product-visuals/, shared/, ...)
+  data/                Content for the [slug] pages (products, tools, agents, resources)
+  lib/
+    api.js             fetch wrapper + API helpers (newsletterApi)
+    site.js            Site name, description and URL used for SEO
+    og.js              Draws the Open Graph images
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Adding a page to a `[slug]` section
+
+- **Product**: add an entry in `src/data/products.js`.
+- **Resource**: add an entry in `src/data/resources.js`.
+- **AI tool**: add the slug and name to `src/data/tools.js`, and its content in `components/AIToolPage.js`.
+- **Agent**: add the slug and name to `src/data/agents.js`, and its content in `components/AgentsPage.js`.
+
+The route, sitemap entry and Open Graph image are created automatically.
+
+## How it talks to the backend
+
+- `src/lib/api.js` is a small fetch wrapper for the newsletter endpoints; it throws an `ApiError` with a readable message on failure. The chat page calls `POST /api/chat` directly and streams the reply.
+- The backend must allow this site's origin: set its `FRONTEND_URL` to the address you serve this app from.
+
+## Deployment
+
+1. Deploy the backend first and note its public URL.
+2. Deploy this app (Vercel works out of the box; any Node host can run `npm run build && npm start`).
+3. Set `NEXT_PUBLIC_API_URL`, and `NEXT_PUBLIC_SITE_URL` **before** building.
+4. In the backend, set `NODE_ENV=production` and `FRONTEND_URL` to this site's URL.
+5. Check `/robots.txt`, `/sitemap.xml` and an Open Graph preview (e.g. paste a URL into a chat app) after deploying.

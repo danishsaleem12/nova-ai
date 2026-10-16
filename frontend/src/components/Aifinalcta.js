@@ -38,10 +38,10 @@ const HEADING = [
 ];
 const SUBTEXT = "Turn your ideas into reality with one intelligent platform.";
 
-const CTA_LABEL = "Get Started Free";
-const CTA_HREF = "/signup";
+const CTA_LABEL = "Start Chatting";
+const CTA_HREF = "/chat";
 
-const TRUST_LINE = ["No credit card required", "Free forever plan", "Cancel anytime"];
+const TRUST_LINE = ["No sign-up required", "Start in seconds"];
 
 /* Small floating chips on the right, connected with dotted lines. Their
  * `pos` places them within the chip cluster; `depth` sets mouse parallax. */

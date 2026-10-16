@@ -288,7 +288,7 @@ const TOOLS = {
     tagline: "Turn ideas into art",
     icon: "image",
     theme: "fuchsia",
-    badge: "Image generation",
+    badge: "Coming soon",
     heading: [
       { text: "Turn" },
       { text: "ideas" },
@@ -296,8 +296,8 @@ const TOOLS = {
       { br: true },
       { text: "stunning visuals.", gradient: true },
     ],
-    sub: "Describe a scene, pick a style, and watch it appear. Create concept art, social graphics, and product mockups without opening a design tool.",
-    cta: "Try Image Generator",
+    sub: "Image generation is on our roadmap and isn't available yet. This page previews what we're planning: describe a scene, pick a style and get an image back.",
+    cta: "See the preview",
     chips: ["Concept art", "Social graphics", "Mockups", "Backgrounds"],
     floaters: [
       { icon: "palette", label: "Style presets" },
@@ -900,36 +900,34 @@ function useTypewriter(text, active, resetKey, speed = 16) {
   const reduce = useReducedMotion();
   const [n, setN] = useState(0);
   useEffect(() => {
-    if (!active) {
-      setN(0);
-      return;
-    }
-    if (reduce) {
-      setN(text.length);
-      return;
-    }
-    setN(0);
+    if (!active || reduce) return;
     let i = 0;
     const id = setInterval(() => {
       i += 2;
       setN(Math.min(i, text.length));
       if (i >= text.length) clearInterval(id);
     }, speed);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      setN(0); // restart from the beginning when the text / trigger changes
+    };
   }, [text, active, resetKey, reduce, speed]);
-  return text.slice(0, n);
+  const shown = !active ? 0 : reduce ? text.length : n;
+  return text.slice(0, shown);
 }
 
 /** True `ms` after `active` becomes true (resets when `key` changes). */
 function useDelayed(active, ms, key) {
   const [on, setOn] = useState(false);
   useEffect(() => {
-    setOn(false);
     if (!active) return;
     const t = setTimeout(() => setOn(true), ms);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      setOn(false);
+    };
   }, [active, ms, key]);
-  return on;
+  return active && on;
 }
 
 /** idle -> loading -> done state machine for the demos. */

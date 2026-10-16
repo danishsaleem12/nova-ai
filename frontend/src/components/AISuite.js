@@ -1109,8 +1109,8 @@ function ImageCard() {
     <BentoCard
       className="md:col-span-6"
       icon={ImageIcon}
-      title="Image Generation"
-      text="Turn simple ideas into stunning visuals in seconds."
+      title="Image Generation (coming soon)"
+      text="Planned: turn simple ideas into visuals. Not available yet, so this is a preview."
       delay={0.08}
       glow="bg-fuchsia-300/25"
     >
@@ -1177,7 +1177,7 @@ function Typewriter({ text }) {
         }, 3200);
       }
     };
-    tick();
+    timer = setTimeout(tick, 0); // first step on the next tick, not synchronously in the effect
     return () => clearTimeout(timer);
   }, [inView, reduce, text]);
 
@@ -1514,8 +1514,8 @@ function AutomationCard() {
     <BentoCard
       className="md:col-span-5"
       icon={Zap}
-      title="Automation"
-      text="Connect your tools and let AI automate repetitive workflows."
+      title="Automation (coming soon)"
+      text="Planned: connect your tools and let AI automate repetitive workflows. This is a preview."
       delay={0.32}
       glow="bg-indigo-300/30"
     >

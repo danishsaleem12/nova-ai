@@ -20,8 +20,8 @@
 import { useRef } from "react";
 import { MotionConfig, motion, useMotionTemplate, useMotionValue, useSpring, useTransform } from "framer-motion";
 // CHANGED: removed Building2 (Company column is gone), added Wand2 + Cpu for the new columns
-// CHANGED (socials): added Mail + MessageCircle for the Email and WhatsApp icons
-import { ArrowUpRight, BookOpen, Cpu, LayoutGrid, Mail, MessageCircle, ShieldCheck, Sparkles, Wand2 } from "lucide-react";
+import { ArrowUpRight, BookOpen, Cpu, LayoutGrid, Mail, ShieldCheck, Sparkles, Wand2 } from "lucide-react";
+import { CONTACT } from "@/lib/site";
 
 const EASE = [0.22, 1, 0.36, 1];
 
@@ -33,31 +33,23 @@ const BRAND = "NovaAI";
 const DESCRIPTION =
     "The all-in-one AI platform that helps you create, automate, analyze and achieve more. Build the future with AI.";
 
-// CHANGED (socials): your real contact details
-const EMAIL = "mdanishsaleem52@gmail.com";
-const WHATSAPP_NUMBER = "923186039286"; // country code + number, no "+" or spaces
-const WHATSAPP_TEXT = "Hi Danish! I found your portfolio and I'd like to talk about a project.";
+// Demo contact + social links (fictional / generic; no personal contact details).
+const EMAIL = CONTACT.support;
 const LINKEDIN_URL = "https://www.linkedin.com/in/m-danish-489a8b259";
 const GITHUB_URL = "https://github.com/danishsaleem12";
 
-// CHANGED (socials): was ["x", "linkedin", "github", "youtube", "discord"]
 const SOCIALS = [
     { platform: "linkedin", label: "LinkedIn", href: LINKEDIN_URL },
     { platform: "github", label: "GitHub", href: GITHUB_URL },
     {
-        platform: "whatsapp",
-        label: "WhatsApp",
-        href: `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_TEXT)}`,
-    },
-    {
         platform: "email",
         label: "Email",
-        href: `mailto:${EMAIL}?subject=${encodeURIComponent("Project inquiry from your portfolio")}`,
+        href: `mailto:${EMAIL}?subject=${encodeURIComponent("NovaAI enquiry")}`,
     },
 ];
 
 const TRUST_TEXT = "Trusted by 100,000+ creators, teams and businesses worldwide.";
-const TRUST_HREF = "#signup";
+const TRUST_HREF = "/chat";
 const AVATAR_COUNT = 3;
 
 // CHANGED: links are now { label, href } objects (they used to be plain strings)
@@ -354,7 +346,6 @@ function BrandLockup() {
 /* Social icons                                                            */
 /* ====================================================================== */
 
-// CHANGED (socials): removed x / youtube / discord, added whatsapp + email
 function SocialGlyph({ platform }) {
     switch (platform) {
         case "linkedin":
@@ -369,8 +360,6 @@ function SocialGlyph({ platform }) {
                     <path d="M12 1.5a10.5 10.5 0 0 0-3.32 20.47c.52.1.72-.23.72-.5v-1.95c-2.94.64-3.56-1.27-3.56-1.27-.48-1.22-1.17-1.55-1.17-1.55-.96-.65.07-.64.07-.64 1.06.08 1.62 1.09 1.62 1.09.94 1.62 2.47 1.15 3.07.88.1-.68.37-1.15.67-1.42-2.35-.27-4.82-1.17-4.82-5.22 0-1.15.41-2.1 1.09-2.83-.11-.27-.47-1.35.1-2.81 0 0 .89-.28 2.91 1.08a10.1 10.1 0 0 1 5.3 0c2.02-1.36 2.91-1.08 2.91-1.08.57 1.46.21 2.54.1 2.81.68.73 1.09 1.68 1.09 2.83 0 4.06-2.48 4.95-4.84 5.21.38.33.72.97.72 1.96v2.9c0 .27.19.61.73.5A10.5 10.5 0 0 0 12 1.5Z" />
                 </svg>
             );
-        case "whatsapp":
-            return <MessageCircle className="h-3.5 w-3.5" aria-hidden />;
         case "email":
             return <Mail className="h-3.5 w-3.5" aria-hidden />;
         default:
